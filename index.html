@@ -49,6 +49,16 @@
     --radius-lg: 18px;
     --radius-md: 12px;
     --radius-sm: 8px;
+    --radius-tile: 22px;
+
+    /* Per-metric tint colors for the line-detail tiles — the "each metric
+       gets its own color" convention iOS app summary cards (Health,
+       Fitness) use, so the 4 tiles read apart from each other at a glance
+       instead of all being the same neutral card. */
+    --tile-oee:        #2a78d6;
+    --tile-downtime:   #e8720c;
+    --tile-production: #0ca30c;
+    --tile-schedule:   #8355e0;
   }
 
   * { box-sizing: border-box; }
@@ -435,12 +445,45 @@
     line-height: 1.4;
   }
 
-  /* ---------------- Line detail: stat strip + full-width dispatch log ---------------- */
+  /* ---------------- Line detail: stat strip + full-width dispatch log ----------------
+     Styled like an iPhone app's "Today" summary cards (Health/Fitness-app
+     convention): a fixed 2-column grid of equally-weighted tiles, each with
+     its own tinted icon badge, generous rounding, and a soft shadow instead
+     of a hard border. */
   .stat-strip {
     flex: 0 0 auto;
     display: grid;
-    grid-template-columns: 0.9fr 0.6fr 1.05fr 0.6fr;
+    grid-template-columns: repeat(2, 1fr);
     gap: 14px;
+  }
+  .stat-strip > .card {
+    border: none;
+    border-radius: var(--radius-tile);
+    box-shadow: 0 1px 3px rgba(16,19,26,0.05), 0 10px 22px rgba(16,19,26,0.07);
+  }
+  .tile-head {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 10px;
+  }
+  .tile-head h2 { margin: 0; }
+  .tile-icon {
+    width: 34px;
+    height: 34px;
+    border-radius: 10px;
+    flex: 0 0 auto;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .tile-icon svg { width: 18px; height: 18px; }
+  .tile-icon.icon-oee        { background: color-mix(in srgb, var(--tile-oee) 14%, transparent);        color: var(--tile-oee); }
+  .tile-icon.icon-downtime   { background: color-mix(in srgb, var(--tile-downtime) 14%, transparent);   color: var(--tile-downtime); }
+  .tile-icon.icon-production { background: color-mix(in srgb, var(--tile-production) 14%, transparent); color: var(--tile-production); }
+  .tile-icon.icon-schedule   { background: color-mix(in srgb, var(--tile-schedule) 14%, transparent);   color: var(--tile-schedule); }
+  @media (max-width: 480px) {
+    .stat-strip { grid-template-columns: 1fr; }
   }
   @media (max-width: 1400px) {
     /* Not enough width for the side-by-side layouts — stack instead. This
@@ -477,7 +520,6 @@
     html, body { height: auto; min-height: 100%; overflow: auto; }
     #app { height: auto; min-height: 100%; }
 
-    .stat-strip { grid-template-columns: 1fr; }
     .overview-summary { grid-template-columns: repeat(2, 1fr); }
   }
   @media (max-width: 640px) {
@@ -1003,7 +1045,12 @@
     <section id="line-view" hidden>
       <div class="stat-strip">
         <section class="card">
-          <h2>OEE — <span id="line-name-1">—</span><span id="oee-period-suffix"></span></h2>
+          <div class="tile-head">
+            <span class="tile-icon icon-oee" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"></polyline></svg>
+            </span>
+            <h2>OEE — <span id="line-name-1">—</span><span id="oee-period-suffix"></span></h2>
+          </div>
           <div class="meter-value skeleton" id="oee-value">Loading…</div>
           <div class="meter-status">
             <span class="dot" id="oee-dot"></span>
@@ -1017,13 +1064,23 @@
         </section>
 
         <section class="card">
-          <h2 id="dt-card-title">Total Downtime — Today</h2>
+          <div class="tile-head">
+            <span class="tile-icon icon-downtime" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
+            </span>
+            <h2 id="dt-card-title">Total Downtime — Today</h2>
+          </div>
           <div class="stat-value skeleton" id="total-dt-value">Loading…</div>
           <div class="stat-label">minutes, all reasons</div>
         </section>
 
         <section class="card" id="production-card">
-          <h2>Production — <span id="production-period-label">Today</span></h2>
+          <div class="tile-head">
+            <span class="tile-icon icon-production" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path><polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline><line x1="12" y1="22.08" x2="12" y2="12"></line></svg>
+            </span>
+            <h2>Production — <span id="production-period-label">Today</span></h2>
+          </div>
           <div class="prod-grid">
             <div class="prod-metric">
               <div class="prod-metric-label">Cases</div>
@@ -1048,7 +1105,12 @@
              row to OEE / Downtime / Production / Schedule progress, same
              weight as the other three tiles. -->
         <section class="card clickable" id="schedule-summary-card">
-          <h2>Today's Schedule</h2>
+          <div class="tile-head">
+            <span class="tile-icon icon-schedule" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 11 12 14 22 4"></polyline><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"></path></svg>
+            </span>
+            <h2>Today's Schedule</h2>
+          </div>
           <div class="schedule-mini-progress" id="schedule-mini-progress">Loading…</div>
           <div class="meter-track"><div class="meter-fill" id="schedule-mini-fill"></div></div>
           <div class="schedule-mini-note" id="schedule-mini-note"></div>
