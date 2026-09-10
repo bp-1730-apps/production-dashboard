@@ -286,14 +286,28 @@
     display: flex;
     flex-direction: column;
   }
-  #overview-view, #line-view {
+  #overview-view, #line-view, #shift-report-view {
     flex: 1 1 auto;
     min-height: 0;
     display: flex;
     flex-direction: column;
     gap: 14px;
   }
-  #overview-view[hidden], #line-view[hidden] { display: none; }
+  #overview-view[hidden], #line-view[hidden], #shift-report-view[hidden] { display: none; }
+  /* The shift report is a long form meant to be scrolled, on any screen
+     size — unlike the rest of the kiosk it was never meant to fit in one
+     screen, so it always gets normal page scrolling, even above the
+     1400px breakpoint where the rest of the app stays a fixed, non-
+     scrolling "everything fits on one screen" kiosk view. */
+  body:has(#shift-report-view:not([hidden])) {
+    height: auto;
+    min-height: 100%;
+    overflow: auto;
+  }
+  body:has(#shift-report-view:not([hidden])) #app {
+    height: auto;
+    min-height: 100%;
+  }
 
   .card {
     background: var(--surface);
@@ -993,6 +1007,396 @@
   .skeleton {
     color: var(--text-muted);
   }
+
+  /* ============================================================
+     SHIFT REPORT — end-of-shift form + weekly accumulator
+     Reuses the same tokens, .card, .btn, .meter-track/.meter-fill,
+     .pill, .tile-head/.tile-icon, and .empty-state as the rest of the
+     dashboard on purpose, so this reads as one app rather than a second
+     product stitched on. Only genuinely new shapes (form fields, line
+     cards, the weekly log) get their own "sr-" prefixed classes.
+     ============================================================ */
+  .sr-row {
+    display: grid;
+    gap: 12px;
+    margin-bottom: 12px;
+  }
+  .sr-row:last-child { margin-bottom: 0; }
+  .sr-row-1 { grid-template-columns: 1fr; }
+  .sr-row-2 { grid-template-columns: 1fr 1fr; }
+  .sr-row-3 { grid-template-columns: repeat(3, 1fr); }
+  @media (max-width: 900px) {
+    .sr-row-3 { grid-template-columns: 1fr 1fr; }
+  }
+  @media (max-width: 480px) {
+    .sr-row-2, .sr-row-3 { grid-template-columns: 1fr; }
+  }
+
+  .sr-field label {
+    display: block;
+    font-size: 0.72rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--text-muted);
+    margin-bottom: 6px;
+  }
+  .sr-field input, .sr-field textarea {
+    width: 100%;
+    background: var(--page);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    color: var(--text);
+    font-family: inherit;
+    font-size: 0.92rem;
+    padding: 9px 11px;
+    min-height: 44px;
+    transition: border-color 0.15s ease, background 0.15s ease, box-shadow 0.15s ease;
+  }
+  .sr-field textarea { min-height: 62px; resize: vertical; }
+  .sr-field input:focus, .sr-field textarea:focus {
+    outline: none;
+    border-color: var(--accent);
+    background: var(--surface);
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 14%, transparent);
+  }
+  .sr-field input[type="number"] { font-variant-numeric: tabular-nums; }
+  .sr-field input::placeholder, .sr-field textarea::placeholder { color: var(--text-muted); }
+
+  /* ---- Line cards ---- */
+  .sr-line-cards {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    margin-top: 4px;
+  }
+  .sr-lc {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+    overflow: hidden;
+    transition: border-color 0.2s ease, box-shadow 0.2s ease;
+  }
+  .sr-lc:focus-within {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 14%, transparent);
+  }
+  .sr-lc-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    padding: 10px 14px;
+    background: var(--surface-2);
+    flex-wrap: wrap;
+  }
+  .sr-lc-name {
+    font-weight: 800;
+    font-size: 1rem;
+    color: var(--text);
+    letter-spacing: -0.01em;
+    font-variant-numeric: tabular-nums;
+  }
+  .sr-lc-off-badge {
+    display: none;
+    font-size: 0.66rem;
+    font-weight: 700;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    background: var(--surface);
+    color: var(--text-muted);
+    border-radius: 4px;
+    padding: 2px 8px;
+    margin-left: 8px;
+  }
+  .sr-lc.off .sr-lc-off-badge { display: inline-block; }
+  .sr-lc-toggle {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: var(--text-2);
+    cursor: pointer;
+    user-select: none;
+  }
+  .sr-lc-toggle input[type="checkbox"] { accent-color: var(--accent); width: 18px; height: 18px; cursor: pointer; }
+  .sr-lc-body { padding: 12px 14px 8px; transition: opacity 0.2s ease; }
+  .sr-lc.off .sr-lc-body { opacity: 0.4; pointer-events: none; }
+  .sr-lc-row {
+    display: grid;
+    gap: 10px;
+    margin-bottom: 10px;
+  }
+  .sr-lc-row.r4 { grid-template-columns: repeat(4, 1fr); }
+  .sr-lc-row.r2 { grid-template-columns: 1fr 1fr; }
+  .sr-lc-row.r1 { grid-template-columns: 1fr; }
+  @media (max-width: 600px) {
+    .sr-lc-row.r4 { grid-template-columns: repeat(2, 1fr); }
+  }
+  .sr-lc .sr-field input, .sr-lc .sr-field textarea {
+    font-size: 0.85rem;
+    padding: 7px 9px;
+    min-height: 40px;
+  }
+  .sr-lc .sr-field input[type="number"] { text-align: center; }
+  .sr-var-field {
+    font-weight: 800;
+    text-align: center;
+    font-variant-numeric: tabular-nums;
+  }
+  .sr-var-pos { background: color-mix(in srgb, var(--good) 12%, var(--page)); color: var(--good); border-color: color-mix(in srgb, var(--good) 40%, var(--border)) !important; }
+  .sr-var-neg { background: rgba(208,59,59,0.08); color: var(--critical); border-color: color-mix(in srgb, var(--critical) 40%, var(--border)) !important; }
+  .sr-var-zero { background: var(--page); color: var(--text-muted); }
+  .sr-lc-totals {
+    display: flex;
+    align-items: center;
+    gap: 18px;
+    padding: 9px 14px;
+    background: var(--page);
+    border-top: 1px solid var(--border);
+    font-size: 0.82rem;
+    flex-wrap: wrap;
+  }
+  .sr-lc-totals .tot-item { display: flex; align-items: center; gap: 6px; }
+  .sr-lc-totals .tot-label { font-size: 0.65rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; color: var(--text-muted); }
+  .sr-lc-totals .tot-val { font-weight: 800; font-variant-numeric: tabular-nums; }
+
+  /* ---- Status banner (submit feedback) ---- */
+  .sr-status-banner {
+    display: none;
+    align-items: center;
+    gap: 10px;
+    font-size: 0.85rem;
+    font-weight: 600;
+    padding: 10px 16px;
+    border-radius: var(--radius-md);
+  }
+  .sr-status-banner.show { display: flex; }
+  .sr-status-banner.ok { background: color-mix(in srgb, var(--good) 10%, var(--surface)); color: var(--good); border: 1px solid color-mix(in srgb, var(--good) 30%, var(--border)); }
+  .sr-status-banner.err { background: rgba(208,59,59,0.08); color: var(--critical); border: 1px solid rgba(208,59,59,0.35); }
+  .sr-status-banner.loading { background: var(--surface-2); color: var(--text-2); border: 1px solid var(--border); }
+
+  /* ---- Action bar ---- */
+  .sr-action-bar {
+    display: flex;
+    gap: 10px;
+    justify-content: flex-end;
+    flex-wrap: wrap;
+  }
+  @media (max-width: 600px) {
+    .sr-action-bar { flex-direction: column; }
+    .sr-action-bar .btn { justify-content: center; }
+  }
+
+  /* ---- Weekly pace strip ---- */
+  .sr-pace-body {
+    display: flex;
+    align-items: center;
+    gap: 18px;
+    flex-wrap: wrap;
+  }
+  .sr-pace-bar-wrap {
+    flex: 1;
+    min-width: 180px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+  .sr-pace-labels {
+    display: flex;
+    justify-content: space-between;
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: var(--text-2);
+  }
+  .sr-pace-chip {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 2px;
+    flex-shrink: 0;
+  }
+  .sr-pace-delta { font-weight: 800; font-size: 1.1rem; font-variant-numeric: tabular-nums; color: var(--text); }
+  .sr-pace-sub { font-size: 0.72rem; color: var(--text-muted); }
+  .sr-pace-chip.ahead .sr-pace-delta { color: var(--good); }
+  .sr-pace-chip.behind .sr-pace-delta { color: var(--critical); }
+  .sr-pace-chip.warn .sr-pace-delta { color: var(--warning); }
+
+  /* ---- Weekly accumulator panel ---- */
+  .sr-week-badge {
+    margin-left: auto;
+    background: var(--accent);
+    color: var(--accent-ink);
+    border-radius: 12px;
+    padding: 3px 12px;
+    font-size: 0.72rem;
+    font-weight: 700;
+    white-space: nowrap;
+  }
+  .sr-week-totals {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 12px;
+    margin-bottom: 14px;
+  }
+  @media (max-width: 700px) {
+    .sr-week-totals { grid-template-columns: repeat(2, 1fr); }
+  }
+  .sr-shift-log {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+  .sr-shift-entry {
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+    overflow: hidden;
+  }
+  .sr-shift-entry-hdr {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    padding: 10px 14px;
+    background: var(--surface-2);
+    cursor: pointer;
+    user-select: none;
+    flex-wrap: wrap;
+  }
+  @media (hover: hover) {
+    .sr-shift-entry-hdr:hover { background: color-mix(in srgb, var(--accent) 6%, var(--surface-2)); }
+  }
+  .sr-se-meta { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+  .sr-se-date { font-weight: 800; font-size: 0.9rem; color: var(--text); font-variant-numeric: tabular-nums; }
+  .sr-se-sup { font-size: 0.82rem; color: var(--text-2); }
+  .sr-se-kpis { display: flex; gap: 6px; flex-wrap: wrap; }
+  .sr-se-toggle { font-size: 0.8rem; color: var(--text-muted); flex-shrink: 0; transition: transform 0.2s ease; }
+  .sr-se-toggle.open { transform: rotate(180deg); }
+  .sr-shift-entry-body { display: none; border-top: 1px solid var(--border); overflow-x: auto; }
+  .sr-shift-entry-body.open { display: block; }
+
+  /* ---- Tooltip popover ---- */
+  .tt-wrap { display: inline-flex; align-items: center; }
+  .tt-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 16px;
+    height: 16px;
+    border-radius: 50%;
+    background: var(--surface-2);
+    color: var(--text-muted);
+    font-size: 0.62rem;
+    font-weight: 700;
+    cursor: pointer;
+    border: none;
+    line-height: 1;
+    flex-shrink: 0;
+    font-family: inherit;
+    transition: background 0.15s ease, color 0.15s ease;
+  }
+  .tt-btn:hover { background: color-mix(in srgb, var(--accent) 16%, transparent); color: var(--accent); }
+  .tt-pop {
+    position: fixed;
+    z-index: 200;
+    background: var(--text);
+    color: #fff;
+    border-radius: 10px;
+    padding: 12px 14px;
+    font-size: 0.8rem;
+    line-height: 1.55;
+    max-width: 280px;
+    box-shadow: var(--shadow-lg);
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity 0.15s ease;
+  }
+  .tt-pop.visible { opacity: 1; pointer-events: auto; }
+  .tt-pop strong { color: #fff; font-weight: 700; }
+  .tt-pop .tt-good { color: #6ee7b7; font-weight: 600; }
+  .tt-pop .tt-bad { color: #fca5a5; font-weight: 600; }
+  .tt-pop .tt-action { color: #fde68a; font-weight: 600; }
+  .tt-pop hr { border: none; border-top: 1px solid rgba(255,255,255,0.15); margin: 8px 0; }
+
+  /* ============================================================
+     PRINT — Daily / Weekly Shift Report
+     Hidden on screen; #sr-print-report is built on demand right before
+     window.print() and is the only thing print media shows.
+     ============================================================ */
+  #sr-print-report { display: none; }
+  @media print {
+    body { background: #fff !important; margin: 0; }
+    #app, .modal-overlay, #ttPop { display: none !important; }
+    #sr-print-report { display: block !important; }
+  }
+  #sr-print-report {
+    font-family: "Inter", Arial, sans-serif;
+    font-size: 10pt;
+    color: var(--text);
+    background: #fff;
+  }
+  .pr-page { width: 100%; max-width: 900px; margin: 0 auto; padding: 0 20pt; }
+  .pr-hdr {
+    background: var(--accent);
+    color: #fff;
+    padding: 14pt 20pt 12pt;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    print-color-adjust: exact; -webkit-print-color-adjust: exact;
+  }
+  .pr-hdr h1 { font-size: 14pt; font-weight: 700; margin: 0 0 2pt; letter-spacing: -0.02em; }
+  .pr-hdr .pr-sub { font-size: 7pt; opacity: 0.75; text-transform: uppercase; letter-spacing: 0.08em; }
+  .pr-hdr-right { text-align: right; font-size: 8pt; opacity: 0.9; }
+  .pr-meta { display: grid; grid-template-columns: repeat(4, 1fr); border: 1pt solid var(--border); border-top: none; margin-bottom: 10pt; }
+  .pr-meta-item { padding: 6pt 10pt; border-right: 1pt solid var(--border); }
+  .pr-meta-item:last-child { border-right: none; }
+  .pr-meta-item .mk { font-size: 6.5pt; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-muted); margin-bottom: 2pt; }
+  .pr-meta-item .mv { font-size: 10pt; font-weight: 700; color: var(--text); }
+  .pr-kpi-row { display: grid; gap: 7pt; margin-bottom: 9pt; }
+  .pr-kpi-row.k2 { grid-template-columns: repeat(2, 1fr); }
+  .pr-kpi-row.k3 { grid-template-columns: repeat(3, 1fr); }
+  .pr-kpi-row.k4 { grid-template-columns: repeat(4, 1fr); }
+  .pr-kpi { border: 1pt solid var(--border); border-radius: 4pt; padding: 7pt 9pt; background: var(--page); print-color-adjust: exact; -webkit-print-color-adjust: exact; }
+  .pr-kpi .kk { font-size: 6.5pt; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-muted); margin-bottom: 3pt; }
+  .pr-kpi .kv { font-size: 16pt; font-weight: 700; line-height: 1; }
+  .pr-kpi .ksub { font-size: 7pt; color: var(--text-muted); margin-top: 2pt; }
+  .pr-kpi.green { background: color-mix(in srgb, var(--good) 10%, #fff); border-color: color-mix(in srgb, var(--good) 35%, var(--border)); } .pr-kpi.green .kv { color: var(--good); }
+  .pr-kpi.amber { background: color-mix(in srgb, var(--warning) 12%, #fff); border-color: color-mix(in srgb, var(--warning) 40%, var(--border)); } .pr-kpi.amber .kv { color: #92610a; }
+  .pr-kpi.red { background: rgba(208,59,59,0.08); border-color: rgba(208,59,59,0.35); } .pr-kpi.red .kv { color: var(--critical); }
+  .pr-kpi.neutral .kv { color: var(--text); }
+  .pr-sec-hdr { display: flex; align-items: center; gap: 6pt; margin: 10pt 0 5pt; page-break-after: avoid; }
+  .pr-sec-hdr .bar { width: 4pt; height: 14pt; background: var(--accent); border-radius: 2pt; flex-shrink: 0; print-color-adjust: exact; -webkit-print-color-adjust: exact; }
+  .pr-sec-hdr span { font-size: 9pt; font-weight: 700; color: var(--text); text-transform: uppercase; letter-spacing: 0.05em; }
+  .pr-sec-hdr::after { content: ''; flex: 1; height: 1pt; background: var(--border); }
+  .pr-table { width: 100%; border-collapse: collapse; font-size: 8.5pt; margin-bottom: 8pt; page-break-inside: avoid; }
+  .pr-table th { background: var(--accent); color: #fff; padding: 5pt 7pt; text-align: left; font-size: 7pt; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; print-color-adjust: exact; -webkit-print-color-adjust: exact; }
+  .pr-table th.c { text-align: center; }
+  .pr-table td { padding: 5pt 7pt; border-bottom: 1pt solid var(--border); vertical-align: middle; }
+  .pr-table td.c { text-align: center; }
+  .pr-table tr:nth-child(even) td { background: var(--page); print-color-adjust: exact; -webkit-print-color-adjust: exact; }
+  .pr-table .line-name { font-weight: 700; color: var(--accent); font-family: monospace; }
+  .pr-table .line-off { font-weight: 700; color: var(--text-muted); font-family: monospace; }
+  .pr-table .lost-cell { font-weight: 700; background: color-mix(in srgb, var(--warning) 14%, #fff) !important; print-color-adjust: exact; -webkit-print-color-adjust: exact; }
+  .pr-bar-wrap { margin-bottom: 8pt; }
+  .pr-bar-row { display: flex; align-items: center; gap: 6pt; margin-bottom: 3pt; font-size: 8pt; }
+  .pr-bar-label { width: 38pt; font-weight: 700; color: var(--accent); font-family: monospace; flex-shrink: 0; }
+  .pr-bar-label.off { color: var(--text-muted); }
+  .pr-bar-track { flex: 1; background: var(--border); border-radius: 3pt; height: 10pt; overflow: hidden; print-color-adjust: exact; -webkit-print-color-adjust: exact; }
+  .pr-bar-fill { height: 100%; border-radius: 3pt; print-color-adjust: exact; -webkit-print-color-adjust: exact; }
+  .pr-bar-val { width: 36pt; text-align: right; font-weight: 700; flex-shrink: 0; font-size: 7.5pt; }
+  .pr-bar-note { width: 72pt; font-size: 7pt; color: var(--text-muted); flex-shrink: 0; }
+  .pr-notes { background: var(--page); border-left: 3pt solid var(--accent); padding: 5pt 9pt; border-radius: 0 4pt 4pt 0; margin-bottom: 6pt; font-size: 8.5pt; color: var(--text-2); print-color-adjust: exact; -webkit-print-color-adjust: exact; }
+  .pr-notes .nk { font-size: 6.5pt; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-muted); margin-bottom: 2pt; }
+  .pr-badge { display: inline-block; padding: 1pt 5pt; border-radius: 3pt; font-size: 7pt; font-weight: 700; print-color-adjust: exact; -webkit-print-color-adjust: exact; }
+  .pr-badge-green { background: color-mix(in srgb, var(--good) 14%, #fff); color: var(--good); }
+  .pr-badge-amber { background: color-mix(in srgb, var(--warning) 18%, #fff); color: #92610a; }
+  .pr-badge-red { background: rgba(208,59,59,0.1); color: var(--critical); }
+  .pr-badge-gray { background: var(--surface-2); color: var(--text-2); }
+  .pr-badge-off { background: var(--surface-2); color: var(--text-muted); }
+  .pr-footer { margin-top: 14pt; padding-top: 6pt; border-top: 1pt solid var(--border); display: flex; justify-content: space-between; font-size: 7pt; color: var(--text-muted); }
+  .pr-pe-note { font-size: 7pt; color: var(--text-muted); font-style: italic; }
 </style>
 </head>
 <body>
@@ -1125,6 +1529,111 @@
       </section>
     </section>
 
+    <!-- ---------------- Shift Report: end-of-shift form + weekly accumulator ---------------- -->
+    <section id="shift-report-view" hidden>
+
+      <section class="card" id="sr-pace-card" hidden>
+        <div class="tile-head">
+          <span class="tile-icon icon-pace" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><circle cx="12" cy="12" r="6"></circle><circle cx="12" cy="12" r="2"></circle></svg>
+          </span>
+          <h2>Weekly Pace</h2>
+          <span class="tt-wrap"><button type="button" class="tt-btn" data-tt="pace">?</button></span>
+        </div>
+        <div class="sr-pace-body">
+          <div class="sr-pace-bar-wrap">
+            <div class="sr-pace-labels"><span id="sr-pace-left">—</span><span id="sr-pace-right">—</span></div>
+            <div class="meter-track"><div class="meter-fill" id="sr-pace-fill"></div></div>
+          </div>
+          <div class="sr-pace-chip" id="sr-pace-chip">
+            <div class="sr-pace-delta" id="sr-pace-delta">—</div>
+            <div class="sr-pace-sub" id="sr-pace-sub">projected vs target</div>
+          </div>
+        </div>
+      </section>
+
+      <form autocomplete="off" id="sr-form">
+
+        <section class="card">
+          <div class="tile-head"><h2>Shift Information</h2><span class="tt-wrap"><button type="button" class="tt-btn" data-tt="shiftInfo">?</button></span></div>
+          <div class="sr-row sr-row-2">
+            <div class="sr-field"><label>Shift Date</label><input type="date" id="sr-date" required></div>
+            <div class="sr-field"><label>Supervisor / Manager</label><input type="text" id="sr-sup" placeholder="Enter your name" required></div>
+          </div>
+        </section>
+
+        <section class="card">
+          <div class="tile-head"><h2>Safety</h2><span class="tt-wrap"><button type="button" class="tt-btn" data-tt="safety">?</button></span></div>
+          <div class="sr-row sr-row-3">
+            <div class="sr-field"><label>Unsafe Conditions</label><input type="number" id="sr-uc" value="0" min="0"></div>
+            <div class="sr-field"><label>Near Misses</label><input type="number" id="sr-nm" value="0" min="0"></div>
+            <div class="sr-field"><label>First Aid Incidents</label><input type="number" id="sr-fa" value="0" min="0"></div>
+          </div>
+          <div class="sr-row sr-row-1">
+            <div class="sr-field"><label>Safety Comments</label><textarea id="sr-sc" placeholder="Describe any safety observations or incidents…"></textarea></div>
+          </div>
+        </section>
+
+        <section class="card">
+          <div class="tile-head"><h2>Materials</h2><span class="tt-wrap"><button type="button" class="tt-btn" data-tt="materials">?</button></span></div>
+          <div class="sr-row sr-row-2">
+            <div class="sr-field"><label>Shortages</label><textarea id="sr-sh" placeholder="List any material shortages…"></textarea></div>
+            <div class="sr-field"><label>STOs</label><textarea id="sr-sto" placeholder="Stock transfer order notes…"></textarea></div>
+          </div>
+        </section>
+
+        <section class="card">
+          <div class="tile-head"><h2>Attendance</h2><span class="tt-wrap"><button type="button" class="tt-btn" data-tt="attendance">?</button></span></div>
+          <div class="sr-row sr-row-3">
+            <div class="sr-field"><label>Absences</label><input type="number" id="sr-ab" value="0" min="0"></div>
+            <div class="sr-field"><label>Headcount Needed</label><input type="number" id="sr-hn" min="0"></div>
+            <div class="sr-field"><label>Headcount Present</label><input type="number" id="sr-hp" min="0"></div>
+          </div>
+        </section>
+
+        <section class="card">
+          <div class="tile-head"><h2>SAP</h2><span class="tt-wrap"><button type="button" class="tt-btn" data-tt="sap">?</button></span></div>
+          <div class="sr-row sr-row-3">
+            <div class="sr-field"><label>Process Orders Completed</label><input type="number" id="sr-sapC" min="0"></div>
+            <div class="sr-field"><label>Process Orders Open</label><input type="number" id="sr-sapO" min="0"></div>
+            <div class="sr-field"><label>Reason (if open)</label><input type="text" id="sr-sapR" placeholder="Explain open orders…"></div>
+          </div>
+        </section>
+
+        <section class="card">
+          <div class="tile-head"><h2>Trainings &amp; Quality</h2><span class="tt-wrap"><button type="button" class="tt-btn" data-tt="training">?</button></span></div>
+          <div class="sr-row sr-row-2">
+            <div class="sr-field"><label>Training Notes</label><textarea id="sr-tr" placeholder="Training activities completed this shift…"></textarea></div>
+            <div class="sr-field"><label>Quality Notes</label><textarea id="sr-qa" placeholder="Quality holds, deviations, observations…"></textarea></div>
+          </div>
+        </section>
+
+        <section class="card">
+          <div class="tile-head"><h2>Production Line Performance</h2><span class="tt-wrap"><button type="button" class="tt-btn" data-tt="lines">?</button></span></div>
+          <div class="sr-line-cards" id="sr-line-cards"></div>
+        </section>
+
+      </form>
+
+      <div class="sr-status-banner" id="sr-status-banner"></div>
+
+      <div class="sr-action-bar">
+        <button type="button" class="btn secondary" id="sr-clear-btn">Clear Form</button>
+        <button type="button" class="btn" id="sr-submit-btn">Submit to Week</button>
+        <button type="button" class="btn secondary" id="sr-daily-pdf-btn">Daily Report</button>
+        <button type="button" class="btn secondary" id="sr-weekly-pdf-btn">Weekly Report</button>
+      </div>
+
+      <section class="card" id="sr-week-panel">
+        <div class="tile-head">
+          <h2>Weekly Accumulator — <span id="sr-week-sub">Loading…</span></h2>
+          <span class="sr-week-badge" id="sr-week-badge">0 shifts</span>
+        </div>
+        <div id="sr-week-body"><div class="empty-state">Loading…</div></div>
+      </section>
+
+    </section>
+
     <!-- Today's Schedule modal — opened by tapping the compact tile above.
          Holds the exact same upload/day-picker/checklist content that used
          to sit permanently in a card; nothing about how it works changed,
@@ -1162,6 +1671,11 @@
   </footer>
 
 </div>
+
+<!-- Built on demand by srDownloadDailyPDF()/srDownloadWeeklyPDF() right
+     before window.print() — hidden on screen, the only thing @media print
+     shows (see the PRINT block in <style> above). -->
+<div id="sr-print-report"></div>
 
 <!-- SheetJS: reads the planner's .xlsb schedule file entirely in the
      browser (same library family — "xlsx" — your Ops Hub already uses for
@@ -1470,6 +1984,14 @@ function buildTabs() {
   overviewBtn.addEventListener("click", () => setViewMode("overview"));
   nav.appendChild(overviewBtn);
 
+  const shiftReportBtn = document.createElement("button");
+  shiftReportBtn.type = "button";
+  shiftReportBtn.textContent = "Shift Report";
+  shiftReportBtn.setAttribute("role", "tab");
+  shiftReportBtn.setAttribute("aria-selected", viewMode === "shift-report" ? "true" : "false");
+  shiftReportBtn.addEventListener("click", () => setViewMode("shift-report"));
+  nav.appendChild(shiftReportBtn);
+
   const divider = document.createElement("div");
   divider.className = "tab-divider";
   nav.appendChild(divider);
@@ -1497,6 +2019,7 @@ function setViewMode(newMode, line) {
 
   document.getElementById("overview-view").hidden = viewMode !== "overview";
   document.getElementById("line-view").hidden = viewMode !== "line";
+  document.getElementById("shift-report-view").hidden = viewMode !== "shift-report";
   document.getElementById("mode-row").hidden = viewMode !== "line";
   buildTabs();
 
@@ -1504,6 +2027,11 @@ function setViewMode(newMode, line) {
     stopAutoRefresh();
     refreshOverview();
     if (overviewMode === "live") startOverviewAutoRefresh(); else stopOverviewAutoRefresh();
+  } else if (viewMode === "shift-report") {
+    stopAutoRefresh();
+    stopOverviewAutoRefresh();
+    srLoadWeekPanel();
+    srLoadPaceStrip();
   } else {
     stopOverviewAutoRefresh();
     resetLoadingState();
@@ -2470,6 +2998,630 @@ function tickClock() {
   document.getElementById("clock").textContent =
     new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" });
 }
+
+/* ============================================================
+   SHIFT REPORT — end-of-shift form + weekly accumulator
+   ------------------------------------------------------------
+   A separate top-level tab (like Overview) rather than something
+   scoped to one line, since a shift report covers the whole plant at
+   once. Submitted shifts write to eos_production_shifts (see
+   supabase/shift_reports.sql — a separate one-time setup step from
+   schedule_state.sql / production_actuals.sql) and accumulate into the
+   Weekly Accumulator panel for the current Monday–Sunday week. The
+   Daily/Weekly Report buttons build a print-only view from the same
+   data into #sr-print-report, which @media print swaps in for the
+   whole app (see the PRINT block in <style> above).
+   ============================================================ */
+const SR_PE = 0.98; // attainment efficiency factor — (cases produced / cases planned) × 0.98, matching the plant's own definition
+
+function srGetMonday(d) {
+  const dt = new Date(d);
+  dt.setHours(0, 0, 0, 0);
+  const day = dt.getDay();
+  dt.setDate(dt.getDate() - (day === 0 ? 6 : day - 1));
+  return dt.toISOString().slice(0, 10);
+}
+function srGetSunday(mondayIso) {
+  const d = new Date(mondayIso + "T00:00:00");
+  d.setDate(d.getDate() + 6);
+  return d.toISOString().slice(0, 10);
+}
+function srFmtWeekRange(mondayIso) {
+  const mon = new Date(mondayIso + "T00:00:00");
+  const sun = new Date(mon);
+  sun.setDate(sun.getDate() + 6);
+  const fmt = d => d.toLocaleDateString([], { month: "short", day: "numeric" });
+  return `${fmt(mon)} – ${fmt(sun)}`;
+}
+// MM/DD/YYYY — a shift log / printed report reads better with the full
+// date spelled out than the "Sep 10"-style short label the rest of the
+// dashboard uses (formatDateLabel), since these are meant as records.
+function srFullDate(iso) {
+  if (!iso) return "—";
+  const [y, m, d] = iso.split("-");
+  return `${m}/${d}/${y}`;
+}
+
+const srMonday = srGetMonday(new Date());
+const srSunday = srGetSunday(srMonday);
+
+// ---- Line cards: one per CONFIG.LINES entry, same list the rest of the
+// dashboard uses, so a line added there (see the CONFIG.LINES comment
+// about "2F") shows up here too without a second place to edit. ----
+(function srBuildLineCards() {
+  const wrap = document.getElementById("sr-line-cards");
+  CONFIG.LINES.forEach(line => {
+    const card = document.createElement("div");
+    card.className = "sr-lc";
+    card.id = "sr-lc-" + line.code;
+    card.innerHTML = `
+      <div class="sr-lc-head">
+        <span class="sr-lc-name">${escapeHtml(line.name)}<span class="sr-lc-off-badge">Offline</span></span>
+        <label class="sr-lc-toggle" for="sr-run-${line.code}">Line Running
+          <input type="checkbox" id="sr-run-${line.code}" checked>
+        </label>
+      </div>
+      <div class="sr-lc-body">
+        <div class="sr-lc-row r4">
+          <div class="sr-field"><label>Pounds Planned</label><input type="number" data-l="${line.code}" data-c="lbsPl" min="0" placeholder="0"></div>
+          <div class="sr-field"><label>Cases Planned</label><input type="number" data-l="${line.code}" data-c="csPl" min="0" placeholder="0"></div>
+          <div class="sr-field"><label>Pounds Produced</label><input type="number" data-l="${line.code}" data-c="lbsAc" min="0" placeholder="0"></div>
+          <div class="sr-field"><label>Cases Produced</label><input type="number" data-l="${line.code}" data-c="csAc" min="0" placeholder="0"></div>
+        </div>
+        <div class="sr-lc-row r2">
+          <div class="sr-field"><label>Lbs Variance</label><input type="number" data-l="${line.code}" data-c="lbsVar" readonly tabindex="-1" class="sr-var-field"></div>
+          <div class="sr-field"><label>Cases Variance</label><input type="number" data-l="${line.code}" data-c="csVar" readonly tabindex="-1" class="sr-var-field"></div>
+        </div>
+        <div class="sr-lc-row r1">
+          <div class="sr-field"><label>Notes</label><textarea data-l="${line.code}" data-c="cm" placeholder="Notes for this line…" rows="2"></textarea></div>
+        </div>
+      </div>
+      <div class="sr-lc-totals">
+        <div class="tot-item"><span class="tot-label">Lbs Variance</span><span class="tot-val" id="sr-disp-lbsVar-${line.code}" style="color:var(--text-muted)">—</span></div>
+        <div class="tot-item"><span class="tot-label">Cases Variance</span><span class="tot-val" id="sr-disp-csVar-${line.code}" style="color:var(--text-muted)">—</span></div>
+        <div class="tot-item"><span class="tot-label">Attainment</span><span class="tot-val" id="sr-disp-att-${line.code}" style="color:var(--text-muted)">—</span></div>
+      </div>`;
+    wrap.appendChild(card);
+    card.querySelector(`#sr-run-${line.code}`).addEventListener("change", function () {
+      card.classList.toggle("off", !this.checked);
+    });
+  });
+
+  wrap.addEventListener("input", function (e) {
+    const l = e.target.dataset.l;
+    if (!l) return;
+    const q = c => wrap.querySelector(`[data-l="${l}"][data-c="${c}"]`);
+    const lbsPl = parseFloat(q("lbsPl")?.value) || 0, lbsAc = parseFloat(q("lbsAc")?.value) || 0;
+    const csPl = parseFloat(q("csPl")?.value) || 0, csAc = parseFloat(q("csAc")?.value) || 0;
+    const lbsVar = (lbsPl || lbsAc) ? lbsAc - lbsPl : null;
+    const csVar = (csPl || csAc) ? csAc - csPl : null;
+    srSetVarField(q("lbsVar"), lbsVar);
+    srSetVarField(q("csVar"), csVar);
+    srSetVarDisp("sr-disp-lbsVar-" + l, lbsVar, "lbs");
+    srSetVarDisp("sr-disp-csVar-" + l, csVar, "cs");
+    const attEl = document.getElementById("sr-disp-att-" + l);
+    if (attEl) {
+      if (csPl > 0) {
+        const p = Math.round((csAc / csPl) * 100 * SR_PE);
+        attEl.textContent = p + "%";
+        attEl.style.color = p >= 90 ? "var(--good)" : p >= 70 ? "var(--warning)" : "var(--critical)";
+      } else {
+        attEl.textContent = "—";
+        attEl.style.color = "var(--text-muted)";
+      }
+    }
+  });
+})();
+
+function srSetVarField(el, val) {
+  if (!el) return;
+  el.value = val !== null ? val : "";
+  el.className = "sr-var-field " + (val === null ? "" : (val > 0 ? "sr-var-pos" : val < 0 ? "sr-var-neg" : "sr-var-zero"));
+}
+function srSetVarDisp(id, val, unit) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  el.textContent = val !== null ? (val > 0 ? "+" : "") + val.toLocaleString() + " " + unit : "—";
+  el.style.color = val === null ? "var(--text-muted)" : val >= 0 ? "var(--good)" : "var(--critical)";
+}
+
+// ---- Gather the whole form into one plain object ----
+function srGather() {
+  const v = id => document.getElementById(id)?.value || "";
+  const wrap = document.getElementById("sr-line-cards");
+  const lines = CONFIG.LINES.map(line => {
+    const card = document.getElementById("sr-lc-" + line.code);
+    const running = card ? !card.classList.contains("off") : true;
+    const g = c => wrap.querySelector(`[data-l="${line.code}"][data-c="${c}"]`)?.value || "";
+    return { code: line.code, line: line.name, running, lbsPl: g("lbsPl"), csPl: g("csPl"), lbsAc: g("lbsAc"), csAc: g("csAc"), lbsVar: g("lbsVar"), csVar: g("csVar"), cm: g("cm") };
+  });
+  return {
+    sd: v("sr-date"), sup: v("sr-sup"),
+    uc: v("sr-uc"), nm: v("sr-nm"), fa: v("sr-fa"), sc: v("sr-sc"),
+    sh: v("sr-sh"), sto: v("sr-sto"),
+    ab: v("sr-ab"), hn: v("sr-hn"), hp: v("sr-hp"),
+    sapC: v("sr-sapC"), sapO: v("sr-sapO"), sapR: v("sr-sapR"),
+    tr: v("sr-tr"), qa: v("sr-qa"),
+    lines,
+  };
+}
+
+function srShowStatus(msg, kind) {
+  const el = document.getElementById("sr-status-banner");
+  el.textContent = msg;
+  el.className = `sr-status-banner show ${kind}`;
+}
+
+// ---- Submit: one insert per shift, no editing after the fact (see the
+// note in shift_reports.sql — a submitted shift is a record, not
+// something the app rewrites) ----
+async function srSubmitToWeek() {
+  const d = srGather();
+  if (!d.sup) { srShowStatus("Enter supervisor name before submitting.", "err"); return; }
+  if (!d.sd) { srShowStatus("Enter shift date before submitting.", "err"); return; }
+  const running = d.lines.filter(l => l.running);
+  const hasData = running.some(l => l.csPl || l.csAc || l.lbsPl || l.lbsAc);
+  if (!hasData) { srShowStatus("No production data to submit yet.", "err"); return; }
+  if (!sb) { srShowStatus("Shift reports aren't connected to Supabase yet — set CONFIG.SUPABASE_ANON_KEY (see the comment above CONFIG).", "err"); return; }
+
+  let lbsPl = 0, lbsAc = 0, csPl = 0, csAc = 0;
+  running.forEach(l => { lbsPl += parseInt(l.lbsPl) || 0; lbsAc += parseInt(l.lbsAc) || 0; csPl += parseInt(l.csPl) || 0; csAc += parseInt(l.csAc) || 0; });
+
+  const row = {
+    shift_date: d.sd,
+    supervisor: d.sup,
+    unsafe_conditions: parseInt(d.uc) || 0,
+    near_misses: parseInt(d.nm) || 0,
+    first_aid: parseInt(d.fa) || 0,
+    safety_comments: d.sc || "",
+    shortages: d.sh || "",
+    stos: d.sto || "",
+    absences: parseInt(d.ab) || 0,
+    // Left blank on purpose stays NULL, not 0 — "didn't fill this in" and
+    // "zero needed" are different facts, and eos_weekly_targets/the
+    // printed report both treat a blank headcount/SAP field as "—" rather
+    // than a real zero.
+    headcount_needed: d.hn ? parseInt(d.hn) : null,
+    headcount_present: d.hp ? parseInt(d.hp) : null,
+    sap_completed: d.sapC ? parseInt(d.sapC) : null,
+    sap_open: d.sapO ? parseInt(d.sapO) : null,
+    sap_reason: d.sapR || "",
+    training_notes: d.tr || "",
+    quality_notes: d.qa || "",
+    lbs_planned: lbsPl, lbs_produced: lbsAc, lbs_variance: lbsAc - lbsPl,
+    cases_planned: csPl, cases_produced: csAc, cases_variance: csAc - csPl,
+    lines: running.map(l => ({
+      line: l.line,
+      lbs_planned: parseInt(l.lbsPl) || 0, lbs_produced: parseInt(l.lbsAc) || 0, lbs_variance: parseInt(l.lbsVar) || 0,
+      cases_planned: parseInt(l.csPl) || 0, cases_produced: parseInt(l.csAc) || 0, cases_variance: parseInt(l.csVar) || 0,
+      notes: l.cm || "",
+    })),
+  };
+
+  const btn = document.getElementById("sr-submit-btn");
+  btn.disabled = true;
+  srShowStatus("Submitting…", "loading");
+  try {
+    const { error } = await sb.from("eos_production_shifts").insert(row);
+    if (error) throw error;
+    srShowStatus("✓ Shift submitted successfully.", "ok");
+    srClearForm(true);
+    await srLoadWeekPanel();
+  } catch (err) {
+    console.error(err);
+    srShowStatus(`✗ Submit failed: ${err.message || err}`, "err");
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+// ---- Clear form ----
+function srClearForm(silent) {
+  if (!silent && !confirm("Clear all form data for this shift?")) return;
+  document.getElementById("sr-form").reset();
+  document.getElementById("sr-date").valueAsDate = new Date();
+  const wrap = document.getElementById("sr-line-cards");
+  CONFIG.LINES.forEach(line => {
+    const card = document.getElementById("sr-lc-" + line.code);
+    if (card) {
+      card.classList.remove("off");
+      document.getElementById("sr-run-" + line.code).checked = true;
+    }
+    ["lbsPl", "csPl", "lbsAc", "csAc"].forEach(c => {
+      const el = wrap.querySelector(`[data-l="${line.code}"][data-c="${c}"]`);
+      if (el) el.value = "";
+    });
+    srSetVarField(wrap.querySelector(`[data-l="${line.code}"][data-c="lbsVar"]`), null);
+    srSetVarField(wrap.querySelector(`[data-l="${line.code}"][data-c="csVar"]`), null);
+    const cm = wrap.querySelector(`[data-l="${line.code}"][data-c="cm"]`);
+    if (cm) cm.value = "";
+    srSetVarDisp("sr-disp-lbsVar-" + line.code, null, "lbs");
+    srSetVarDisp("sr-disp-csVar-" + line.code, null, "cs");
+    const attEl = document.getElementById("sr-disp-att-" + line.code);
+    if (attEl) { attEl.textContent = "—"; attEl.style.color = "var(--text-muted)"; }
+  });
+  // Only a manual "Clear Form" click hides the status banner — the silent
+  // auto-clear that follows a successful submit must NOT wipe out the
+  // "✓ Shift submitted successfully" message it just showed.
+  if (!silent) document.getElementById("sr-status-banner").className = "sr-status-banner";
+}
+
+// ---- Weekly accumulator panel — everyone viewing the dashboard sees the
+// same Monday–Sunday total, reloaded every time the Shift Report tab is
+// opened (see setViewMode's "shift-report" branch) ----
+async function srLoadWeekPanel() {
+  const body = document.getElementById("sr-week-body");
+  const sub = document.getElementById("sr-week-sub");
+  const badge = document.getElementById("sr-week-badge");
+  sub.textContent = "Week of " + srFmtWeekRange(srMonday);
+
+  if (!sb) {
+    body.innerHTML = `<div class="empty-state">Shift reports aren't connected to Supabase yet — set CONFIG.SUPABASE_ANON_KEY (see the comment above CONFIG).</div>`;
+    return;
+  }
+
+  try {
+    const { data: rows, error } = await sb.from("eos_production_shifts")
+      .select("*")
+      .gte("shift_date", srMonday)
+      .lte("shift_date", srSunday)
+      .order("shift_date", { ascending: false })
+      .order("created_at", { ascending: false });
+    if (error) throw error;
+
+    badge.textContent = rows.length + (rows.length === 1 ? " shift" : " shifts");
+
+    if (!rows.length) {
+      body.innerHTML = `<div class="empty-state">No shifts submitted this week yet.</div>`;
+      return;
+    }
+
+    let lbsPl = 0, lbsAc = 0, lbsVar = 0, csPl = 0, csAc = 0, csVar = 0;
+    rows.forEach(r => { lbsPl += r.lbs_planned || 0; lbsAc += r.lbs_produced || 0; lbsVar += r.lbs_variance || 0; csPl += r.cases_planned || 0; csAc += r.cases_produced || 0; csVar += r.cases_variance || 0; });
+    const attVals = rows.filter(r => r.cases_planned > 0).map(r => Math.round((r.cases_produced / r.cases_planned) * 100 * SR_PE));
+    const avgAtt = attVals.length ? Math.round(attVals.reduce((a, b) => a + b, 0) / attVals.length) : null;
+
+    let html = `<div class="sr-week-totals">
+      <div class="mini-stat"><div class="mini-value">${lbsPl.toLocaleString()}</div><div class="mini-label">Lbs Planned</div></div>
+      <div class="mini-stat"><div class="mini-value">${lbsAc.toLocaleString()}</div><div class="mini-label">Lbs Produced</div></div>
+      <div class="mini-stat"><div class="mini-value" style="color:${lbsVar >= 0 ? "var(--good)" : "var(--critical)"}">${lbsVar > 0 ? "+" : ""}${lbsVar.toLocaleString()}</div><div class="mini-label">Lbs Variance</div></div>
+      <div class="mini-stat"><div class="mini-value" style="color:${csVar >= 0 ? "var(--good)" : "var(--critical)"}">${csVar > 0 ? "+" : ""}${csVar.toLocaleString()}</div><div class="mini-label">Cases Variance</div></div>
+      ${avgAtt !== null ? `<div class="mini-stat"><div class="mini-value" style="color:${avgAtt >= 90 ? "var(--good)" : avgAtt >= 70 ? "var(--warning)" : "var(--critical)"}">${avgAtt}%</div><div class="mini-label">Avg Attainment</div></div>` : ""}
+    </div><div class="sr-shift-log">`;
+
+    rows.forEach((r, idx) => {
+      const att = r.cases_planned > 0 ? Math.round((r.cases_produced / r.cases_planned) * 100 * SR_PE) : null;
+      html += `<div class="sr-shift-entry">
+        <div class="sr-shift-entry-hdr" onclick="srToggleEntry(${idx})">
+          <div class="sr-se-meta"><span class="sr-se-date">${srFullDate(r.shift_date)}</span><span class="sr-se-sup">${escapeHtml(r.supervisor || "—")}</span></div>
+          <div class="sr-se-kpis">
+            <span class="pill" style="background:var(--surface-2)">Cs: ${(r.cases_produced || 0).toLocaleString()} / ${(r.cases_planned || 0).toLocaleString()}</span>
+            <span class="pill" style="background:${(r.cases_variance || 0) >= 0 ? colorMix("var(--good)", 0.16) : "rgba(208,59,59,0.12)"};color:${(r.cases_variance || 0) >= 0 ? "var(--good)" : "var(--critical)"}">Cs Var: ${(r.cases_variance || 0) > 0 ? "+" : ""}${(r.cases_variance || 0).toLocaleString()}</span>
+            ${att !== null ? `<span class="pill" style="background:${att >= 90 ? colorMix("var(--good)", 0.16) : att >= 70 ? colorMix("var(--warning)", 0.2) : "rgba(208,59,59,0.12)"};color:${att >= 90 ? "var(--good)" : att >= 70 ? "#92610a" : "var(--critical)"}">${att}%</span>` : ""}
+          </div>
+          <span class="sr-se-toggle" id="sr-se-tog-${idx}">▼</span>
+        </div>
+        <div class="sr-shift-entry-body" id="sr-se-body-${idx}">
+          <table class="dispatch-table"><thead><tr>
+            <th>Line</th><th class="c">Lbs Pl</th><th class="c">Lbs Ac</th><th class="c">Lbs Var</th>
+            <th class="c">Cs Pl</th><th class="c">Cs Ac</th><th class="c">Cs Var</th><th>Notes</th>
+          </tr></thead><tbody>`;
+      (r.lines || []).forEach(l => {
+        const lv = l.lbs_variance || 0, cv = l.cases_variance || 0;
+        html += `<tr>
+          <td style="font-weight:800;color:var(--accent)">${escapeHtml(l.line)}</td>
+          <td class="c">${(l.lbs_planned || 0).toLocaleString()}</td><td class="c">${(l.lbs_produced || 0).toLocaleString()}</td>
+          <td class="c" style="color:${lv >= 0 ? "var(--good)" : "var(--critical)"};font-weight:700">${lv > 0 ? "+" : ""}${lv.toLocaleString()}</td>
+          <td class="c">${(l.cases_planned || 0).toLocaleString()}</td><td class="c">${(l.cases_produced || 0).toLocaleString()}</td>
+          <td class="c" style="color:${cv >= 0 ? "var(--good)" : "var(--critical)"};font-weight:700">${cv > 0 ? "+" : ""}${cv.toLocaleString()}</td>
+          <td style="font-size:0.8rem;color:var(--text-muted)">${escapeHtml(l.notes || "")}</td>
+        </tr>`;
+      });
+      html += `</tbody></table></div></div>`;
+    });
+
+    html += `</div>`;
+    body.innerHTML = html;
+  } catch (err) {
+    console.error(err);
+    body.innerHTML = `<div class="empty-state">Could not load weekly data: ${escapeHtml(err.message || String(err))}</div>`;
+  }
+}
+
+function srToggleEntry(idx) {
+  document.getElementById("sr-se-body-" + idx)?.classList.toggle("open");
+  document.getElementById("sr-se-tog-" + idx)?.classList.toggle("open");
+}
+
+// ---- Weekly pace strip — reads eos_weekly_targets for the current week;
+// stays hidden if no target row exists yet (see shift_reports.sql for how
+// to add one — there's no target-entry screen in the dashboard yet) ----
+async function srLoadPaceStrip() {
+  const card = document.getElementById("sr-pace-card");
+  if (!sb) { card.hidden = true; return; }
+  try {
+    const DAY_COLS = ["mon", "tue", "wed", "thu", "fri", "sat", "sun"];
+    const todayDow = new Date().getDay(); // 0 = Sunday
+    const todayCol = "lbs_target_" + DAY_COLS[todayDow === 0 ? 6 : todayDow - 1];
+
+    const { data: targetRows, error: tErr } = await sb.from("eos_weekly_targets").select("*").eq("week_start", srMonday);
+    if (tErr) throw tErr;
+    if (!targetRows.length) { card.hidden = true; return; }
+    const t = targetRows[0];
+    const todayTarget = parseInt(t[todayCol]) || 0;
+
+    const { data: shiftRows, error: sErr } = await sb.from("eos_production_shifts")
+      .select("lbs_produced, shift_date")
+      .gte("shift_date", srMonday).lte("shift_date", srSunday);
+    if (sErr) throw sErr;
+
+    const byDate = {};
+    shiftRows.forEach(r => { byDate[r.shift_date] = (byDate[r.shift_date] || 0) + (r.lbs_produced || 0); });
+    const todayActual = byDate[todayStr()] || 0;
+
+    const todayIdx = todayDow === 0 ? 6 : todayDow - 1;
+    let wtdTarget = 0, wtdActual = 0;
+    for (let i = 0; i <= todayIdx; i++) {
+      wtdTarget += parseInt(t["lbs_target_" + DAY_COLS[i]]) || 0;
+      const dt = new Date(srMonday + "T12:00:00");
+      dt.setDate(dt.getDate() + i);
+      wtdActual += byDate[dt.toISOString().slice(0, 10)] || 0;
+    }
+
+    const gap = todayActual - todayTarget;
+    const wtdGap = wtdActual - wtdTarget;
+    const pct = todayTarget > 0 ? Math.min((todayActual / todayTarget) * 100, 100) : 0;
+    const ahead = gap >= 0;
+    const chipCls = ahead ? "ahead" : (Math.abs(gap) < todayTarget * 0.05 ? "warn" : "behind");
+
+    card.hidden = false;
+    document.getElementById("sr-pace-left").textContent = todayActual.toLocaleString() + " lbs today";
+    document.getElementById("sr-pace-right").textContent = "Today target: " + todayTarget.toLocaleString();
+    const fill = document.getElementById("sr-pace-fill");
+    fill.style.width = pct.toFixed(1) + "%";
+    fill.style.background = ahead ? "var(--good)" : (Math.abs(gap) < todayTarget * 0.05 ? "var(--warning)" : "var(--critical)");
+    document.getElementById("sr-pace-chip").className = "sr-pace-chip " + chipCls;
+    document.getElementById("sr-pace-delta").textContent = (ahead ? "+" : "") + gap.toLocaleString() + " lbs today";
+    document.getElementById("sr-pace-sub").textContent = "WTD: " + (wtdGap >= 0 ? "+" : "") + wtdGap.toLocaleString() + " vs " + wtdTarget.toLocaleString();
+  } catch (err) {
+    console.warn("Pace strip:", err);
+    card.hidden = true;
+  }
+}
+
+// ---- Print: Daily and Weekly reports ----
+function srBarColor(p) { return p >= 90 ? "var(--good)" : p >= 70 ? "var(--warning)" : "var(--critical)"; }
+function srBadgeClass(p) { return p >= 90 ? "pr-badge-green" : p >= 70 ? "pr-badge-amber" : "pr-badge-red"; }
+function srVarCell(val) {
+  const n = parseFloat(val);
+  if (isNaN(n)) return "—";
+  const color = n > 0 ? "var(--good)" : n < 0 ? "var(--critical)" : "var(--text-muted)";
+  return `<span style="font-weight:700;color:${color}">${n > 0 ? "+" : ""}${n.toLocaleString()}</span>`;
+}
+
+function srBuildDailyReport(d) {
+  const now = new Date().toLocaleString();
+  const running = d.lines.filter(l => l.running);
+  const attVals = running.filter(l => l.csPl && l.csAc).map(l => Math.round((parseFloat(l.csAc) / parseFloat(l.csPl)) * 100 * SR_PE));
+  const avgAtt = attVals.length ? Math.round(attVals.reduce((a, b) => a + b, 0) / attVals.length) : null;
+  const totalCsVar = running.reduce((s, l) => s + (parseFloat(l.csVar) || 0), 0);
+
+  let html = `<div class="pr-page">
+    <div class="pr-hdr"><div><h1>Manufacturing Shift Report</h1><div class="pr-sub">Plant 1730 &bull; Buena Park, CA</div></div>
+    <div class="pr-hdr-right"><strong>${srFullDate(d.sd)}</strong></div></div>
+    <div class="pr-meta">
+      <div class="pr-meta-item"><div class="mk">Supervisor</div><div class="mv">${escapeHtml(d.sup || "—")}</div></div>
+      <div class="pr-meta-item"><div class="mk">Headcount</div><div class="mv">${d.hp || "—"} / ${d.hn || "—"}</div></div>
+      <div class="pr-meta-item"><div class="mk">Avg Attainment</div><div class="mv">${avgAtt !== null ? avgAtt + "%" : "—"}</div></div>
+      <div class="pr-meta-item"><div class="mk">Cases Variance</div><div class="mv">${totalCsVar > 0 ? "+" : ""}${totalCsVar.toLocaleString()}</div></div>
+    </div>`;
+
+  html += `<div class="pr-sec-hdr"><div class="bar"></div><span>Safety</span></div>
+    <div class="pr-kpi-row k3">
+      <div class="pr-kpi ${parseInt(d.uc) > 0 ? "red" : "green"}"><div class="kk">Unsafe Conditions</div><div class="kv">${d.uc || 0}</div></div>
+      <div class="pr-kpi ${parseInt(d.nm) > 0 ? "amber" : "green"}"><div class="kk">Near Misses</div><div class="kv">${d.nm || 0}</div></div>
+      <div class="pr-kpi ${parseInt(d.fa) > 0 ? "red" : "green"}"><div class="kk">First Aid Incidents</div><div class="kv">${d.fa || 0}</div></div>
+    </div>`;
+  if (d.sc) html += `<div class="pr-notes"><div class="nk">Safety Comments</div>${escapeHtml(d.sc)}</div>`;
+
+  html += `<div class="pr-sec-hdr"><div class="bar"></div><span>Materials</span></div>
+    <div class="pr-kpi-row k2">
+      <div class="pr-kpi neutral"><div class="kk">SAP Completed</div><div class="kv">${d.sapC || "—"}</div></div>
+      <div class="pr-kpi ${parseInt(d.sapO) > 0 ? "amber" : "green"}"><div class="kk">SAP Open</div><div class="kv">${d.sapO || "0"}</div>${d.sapR ? `<div class="ksub">${escapeHtml(d.sapR)}</div>` : ""}</div>
+    </div>`;
+  if (d.sh?.trim()) html += `<div class="pr-notes"><div class="nk">Shortages</div>${escapeHtml(d.sh)}</div>`;
+  if (d.sto?.trim()) html += `<div class="pr-notes"><div class="nk">STOs</div>${escapeHtml(d.sto)}</div>`;
+
+  const attPct = (d.hn && d.hp) ? Math.round(parseInt(d.hp) / parseInt(d.hn) * 100) : null;
+  html += `<div class="pr-sec-hdr"><div class="bar"></div><span>Attendance</span></div>
+    <div class="pr-kpi-row k3">
+      <div class="pr-kpi ${parseInt(d.ab) > 0 ? "amber" : "green"}"><div class="kk">Absences</div><div class="kv">${d.ab || 0}</div></div>
+      <div class="pr-kpi neutral"><div class="kk">Needed</div><div class="kv">${d.hn || "—"}</div></div>
+      <div class="pr-kpi ${attPct !== null && attPct < 90 ? "amber" : "green"}"><div class="kk">Present</div><div class="kv">${d.hp || "—"}</div>${attPct !== null ? `<div class="ksub">${attPct}%</div>` : ""}</div>
+    </div>`;
+
+  if (d.tr || d.qa) {
+    html += `<div class="pr-sec-hdr"><div class="bar"></div><span>Trainings &amp; Quality</span></div>`;
+    if (d.tr) html += `<div class="pr-notes"><div class="nk">Trainings</div>${escapeHtml(d.tr)}</div>`;
+    if (d.qa) html += `<div class="pr-notes"><div class="nk">Quality</div>${escapeHtml(d.qa)}</div>`;
+  }
+
+  html += `<div class="pr-sec-hdr"><div class="bar"></div><span>Cases Attainment (PE=${SR_PE})</span></div><div class="pr-bar-wrap">`;
+  d.lines.forEach(l => {
+    if (!l.running) { html += `<div class="pr-bar-row"><div class="pr-bar-label off">${escapeHtml(l.line)}</div><div class="pr-bar-track"><div class="pr-bar-fill" style="width:0%;background:var(--border)"></div></div><div class="pr-bar-val" style="color:var(--text-muted)">Offline</div><div class="pr-bar-note"></div></div>`; return; }
+    const csPl = parseFloat(l.csPl) || 0, csAc = parseFloat(l.csAc) || 0;
+    const p = csPl > 0 ? Math.round((csAc / csPl) * 100 * SR_PE) : 0;
+    const color = csPl > 0 ? srBarColor(p) : "var(--border)";
+    html += `<div class="pr-bar-row"><div class="pr-bar-label">${escapeHtml(l.line)}</div><div class="pr-bar-track"><div class="pr-bar-fill" style="width:${Math.min(p, 100)}%;background:${color}"></div></div><div class="pr-bar-val" style="color:${color}">${csPl > 0 ? p + "%" : "N/A"}</div><div class="pr-bar-note">${csAc ? csAc.toLocaleString() : csPl ? "0" : ""} / ${csPl ? csPl.toLocaleString() : "—"} cs</div></div>`;
+  });
+  html += `</div>`;
+
+  html += `<div class="pr-sec-hdr"><div class="bar"></div><span>Line Performance Detail</span></div>
+    <table class="pr-table"><thead><tr>
+      <th>Line</th><th>Status</th><th class="c">Lbs Pl</th><th class="c">Lbs Ac</th><th class="c">Lbs Var</th>
+      <th class="c">Cs Pl</th><th class="c">Cs Ac</th><th class="c">Cs Var</th><th class="c">Attainment</th><th>Notes</th>
+    </tr></thead><tbody>`;
+  d.lines.forEach(l => {
+    if (!l.running) { html += `<tr><td class="line-off">${escapeHtml(l.line)}</td><td><span class="pr-badge pr-badge-off">Offline</span></td><td class="c" colspan="8" style="color:var(--text-muted);font-style:italic">Not running</td></tr>`; return; }
+    const csPl = parseFloat(l.csPl) || 0, csAc = parseFloat(l.csAc) || 0;
+    const p = csPl > 0 ? Math.round((csAc / csPl) * 100 * SR_PE) : null;
+    html += `<tr><td class="line-name">${escapeHtml(l.line)}</td><td><span class="pr-badge pr-badge-green">Running</span></td>
+      <td class="c">${l.lbsPl || "—"}</td><td class="c">${l.lbsAc || "—"}</td><td class="c lost-cell">${srVarCell(l.lbsVar)}</td>
+      <td class="c">${l.csPl || "—"}</td><td class="c">${l.csAc || "—"}</td><td class="c lost-cell">${srVarCell(l.csVar)}</td>
+      <td class="c">${p !== null ? `<span class="pr-badge ${srBadgeClass(p)}">${p}%</span>` : '<span class="pr-badge pr-badge-gray">—</span>'}</td>
+      <td style="font-size:7.5pt;color:var(--text-2)">${escapeHtml(l.cm || "")}</td></tr>`;
+  });
+  html += `</tbody></table><div class="pr-pe-note">* Attainment = (Cases Produced / Cases Planned) × ${SR_PE}</div>`;
+  html += `<div class="pr-footer"><span>Plant 1730 Ops Hub &bull; Novus Foods, Buena Park CA</span><span>Generated: ${now}</span></div></div>`;
+  return html;
+}
+
+async function srBuildWeeklyReport() {
+  const { data: rows, error } = await sb.from("eos_production_shifts")
+    .select("*")
+    .gte("shift_date", srMonday).lte("shift_date", srSunday)
+    .order("shift_date", { ascending: true });
+  if (error) throw error;
+
+  const now = new Date().toLocaleString();
+  let lbsPl = 0, lbsAc = 0, lbsVar = 0, csPl = 0, csAc = 0, csVar = 0;
+  rows.forEach(r => { lbsPl += r.lbs_planned || 0; lbsAc += r.lbs_produced || 0; lbsVar += r.lbs_variance || 0; csPl += r.cases_planned || 0; csAc += r.cases_produced || 0; csVar += r.cases_variance || 0; });
+  const attVals = rows.filter(r => r.cases_planned > 0).map(r => Math.round((r.cases_produced / r.cases_planned) * 100 * SR_PE));
+  const avgAtt = attVals.length ? Math.round(attVals.reduce((a, b) => a + b, 0) / attVals.length) : null;
+  const range = srFmtWeekRange(srMonday);
+
+  let html = `<div class="pr-page">
+    <div class="pr-hdr"><div><h1>Manufacturing Weekly Summary</h1><div class="pr-sub">Plant 1730 &bull; Buena Park, CA</div></div>
+    <div class="pr-hdr-right"><strong>Week of ${range}</strong><br>${rows.length} shift${rows.length !== 1 ? "s" : ""}</div></div>
+    <div class="pr-meta">
+      <div class="pr-meta-item"><div class="mk">Lbs Planned</div><div class="mv">${lbsPl.toLocaleString()}</div></div>
+      <div class="pr-meta-item"><div class="mk">Lbs Produced</div><div class="mv">${lbsAc.toLocaleString()}</div></div>
+      <div class="pr-meta-item"><div class="mk">Cases Variance</div><div class="mv" style="color:${csVar >= 0 ? "var(--good)" : "var(--critical)"}">${csVar > 0 ? "+" : ""}${csVar.toLocaleString()}</div></div>
+      <div class="pr-meta-item"><div class="mk">Avg Attainment</div><div class="mv">${avgAtt !== null ? avgAtt + "%" : "—"}</div></div>
+    </div>`;
+
+  html += `<div class="pr-sec-hdr"><div class="bar"></div><span>Week Totals</span></div>
+    <div class="pr-kpi-row k4">
+      <div class="pr-kpi neutral"><div class="kk">Cases Planned</div><div class="kv">${csPl.toLocaleString()}</div></div>
+      <div class="pr-kpi neutral"><div class="kk">Cases Produced</div><div class="kv">${csAc.toLocaleString()}</div></div>
+      <div class="pr-kpi ${csVar >= 0 ? "green" : "red"}"><div class="kk">Cases Variance</div><div class="kv">${csVar > 0 ? "+" : ""}${csVar.toLocaleString()}</div></div>
+      <div class="pr-kpi ${avgAtt !== null ? (avgAtt >= 90 ? "green" : avgAtt >= 70 ? "amber" : "red") : "neutral"}"><div class="kk">Avg Attainment</div><div class="kv">${avgAtt !== null ? avgAtt + "%" : "—"}</div></div>
+    </div>`;
+
+  html += `<div class="pr-sec-hdr"><div class="bar"></div><span>Shift Log</span></div>
+    <table class="pr-table"><thead><tr>
+      <th>Date</th><th>Supervisor</th>
+      <th class="c">Lbs Pl</th><th class="c">Lbs Ac</th><th class="c">Lbs Var</th>
+      <th class="c">Cs Pl</th><th class="c">Cs Ac</th><th class="c">Cs Var</th><th class="c">Attainment</th>
+    </tr></thead><tbody>`;
+  rows.forEach(r => {
+    const att = r.cases_planned > 0 ? Math.round((r.cases_produced / r.cases_planned) * 100 * SR_PE) : null;
+    html += `<tr>
+      <td style="font-family:monospace;font-weight:700">${srFullDate(r.shift_date)}</td><td>${escapeHtml(r.supervisor || "—")}</td>
+      <td class="c">${(r.lbs_planned || 0).toLocaleString()}</td><td class="c">${(r.lbs_produced || 0).toLocaleString()}</td>
+      <td class="c lost-cell">${srVarCell(r.lbs_variance)}</td>
+      <td class="c">${(r.cases_planned || 0).toLocaleString()}</td><td class="c">${(r.cases_produced || 0).toLocaleString()}</td>
+      <td class="c lost-cell">${srVarCell(r.cases_variance)}</td>
+      <td class="c">${att !== null ? `<span class="pr-badge ${srBadgeClass(att)}">${att}%</span>` : '<span class="pr-badge pr-badge-gray">—</span>'}</td>
+    </tr>`;
+  });
+  html += `</tbody></table>`;
+
+  rows.forEach((r, idx) => {
+    html += `<div style="page-break-inside:avoid;margin-top:${idx > 0 ? "14pt" : "8pt"}">
+      <div class="pr-sec-hdr"><div class="bar"></div><span>Shift ${idx + 1} — ${srFullDate(r.shift_date)} &bull; ${escapeHtml(r.supervisor || "—")}</span></div>
+      <table class="pr-table"><thead><tr>
+        <th>Line</th><th class="c">Lbs Pl</th><th class="c">Lbs Ac</th><th class="c">Lbs Var</th>
+        <th class="c">Cs Pl</th><th class="c">Cs Ac</th><th class="c">Cs Var</th><th class="c">Attainment</th><th>Notes</th>
+      </tr></thead><tbody>`;
+    (r.lines || []).forEach(l => {
+      const att = l.cases_planned > 0 ? Math.round((l.cases_produced / l.cases_planned) * 100 * SR_PE) : null;
+      html += `<tr><td class="line-name">${escapeHtml(l.line)}</td>
+        <td class="c">${(l.lbs_planned || 0).toLocaleString()}</td><td class="c">${(l.lbs_produced || 0).toLocaleString()}</td>
+        <td class="c lost-cell">${srVarCell(l.lbs_variance)}</td>
+        <td class="c">${(l.cases_planned || 0).toLocaleString()}</td><td class="c">${(l.cases_produced || 0).toLocaleString()}</td>
+        <td class="c lost-cell">${srVarCell(l.cases_variance)}</td>
+        <td class="c">${att !== null ? `<span class="pr-badge ${srBadgeClass(att)}">${att}%</span>` : '<span class="pr-badge pr-badge-gray">—</span>'}</td>
+        <td style="font-size:7.5pt;color:var(--text-2)">${escapeHtml(l.notes || "")}</td></tr>`;
+    });
+    html += `</tbody></table></div>`;
+  });
+
+  html += `<div class="pr-pe-note" style="margin-top:8pt">* Attainment = (Cases Produced / Cases Planned) × ${SR_PE}</div>`;
+  html += `<div class="pr-footer"><span>Plant 1730 Ops Hub &bull; Novus Foods, Buena Park CA</span><span>Generated: ${now}</span></div></div>`;
+  return html;
+}
+
+function srDownloadDailyPDF() {
+  const d = srGather();
+  if (!d.sup) { srShowStatus("Enter supervisor name before printing.", "err"); return; }
+  if (!d.sd) { srShowStatus("Enter shift date before printing.", "err"); return; }
+  document.getElementById("sr-print-report").innerHTML = srBuildDailyReport(d);
+  window.print();
+}
+
+async function srDownloadWeeklyPDF() {
+  if (!sb) { srShowStatus("Shift reports aren't connected to Supabase yet.", "err"); return; }
+  srShowStatus("Fetching weekly data…", "loading");
+  try {
+    const html = await srBuildWeeklyReport();
+    document.getElementById("sr-print-report").innerHTML = html;
+    document.getElementById("sr-status-banner").className = "sr-status-banner";
+    window.print();
+  } catch (err) {
+    console.error(err);
+    srShowStatus("Could not load weekly data.", "err");
+  }
+}
+
+// ---- Tooltips: one shared popover, positioned next to whichever "?"
+// button was tapped ----
+const SR_TOOLTIPS = {
+  pace:       `<strong>Weekly Pace Strip</strong><hr>Shows today's lbs produced vs today's target, and your week-to-date gap. <span class="tt-action">Behind today?</span> Check headcount, a line issue, or materials — while there's still time to act.`,
+  shiftInfo:  `<strong>Shift Information</strong><hr>Date and supervisor name. Supervisor field tracks performance patterns — consistent shortfalls under specific supervisors may indicate a training or support opportunity.`,
+  safety:     `<strong>Safety Section</strong><hr>Record all events, even minor ones. Near Misses are the most important — accidents that almost happened. A shift with 3 near misses and no injuries is more concerning than 1 first aid. <span class="tt-action">Pattern on the same line?</span> Equipment or workflow review needed.`,
+  materials:  `<strong>Materials Section</strong><hr>Document shortages and STOs. <span class="tt-bad">Same shortage item weekly?</span> Escalate to procurement — systemic issue, not a floor issue. <span class="tt-action">Frequent STOs?</span> Pre-shift staging process needs review.`,
+  attendance: `<strong>Attendance Section</strong><hr>Headcount gap for this shift. <span class="tt-action">Absences above 2 regularly?</span> Investigate patterns — day of week, specific individuals, or scheduling.`,
+  sap:        `<strong>SAP Section</strong><hr>Process orders completed vs open. <span class="tt-bad">Open orders mean inventory records don't match production reality</span> — creates downstream scheduling and materials issues. <span class="tt-action">Consistently open?</span> Simplify the closing process or provide targeted training.`,
+  training:   `<strong>Training and Quality</strong><hr>Training = compliance audit trail. Quality = holds, deviations, consumer triggers. <span class="tt-action">Quality holds on one line only?</span> Calibration check or CIL needed.`,
+  lines:      `<strong>Line Performance</strong><hr>Individual data per line this shift. <span class="tt-bad">One line below plan while others hit target?</span> That line is your constraint. <span class="tt-bad">All lines below plan?</span> Plant-wide issue — headcount or materials. <span class="tt-action">High variance across lines?</span> Some lines aren't pulling their weight.`,
+};
+const srTtPop = document.createElement("div");
+srTtPop.className = "tt-pop";
+srTtPop.id = "srTtPop";
+document.body.appendChild(srTtPop);
+let srTtActiveBtn = null;
+function srShowTooltip(btn, key, event) {
+  event.stopPropagation();
+  const html = SR_TOOLTIPS[key] || key;
+  if (srTtActiveBtn === btn && srTtPop.classList.contains("visible")) {
+    srTtPop.classList.remove("visible");
+    srTtActiveBtn = null;
+    return;
+  }
+  srTtActiveBtn = btn;
+  srTtPop.innerHTML = html;
+  srTtPop.classList.add("visible");
+  const r = btn.getBoundingClientRect(), pw = 280;
+  let left = r.left + r.width / 2 - pw / 2, top = r.top - 10 - (srTtPop.offsetHeight || 160);
+  if (left < 8) left = 8;
+  if (left + pw > window.innerWidth - 8) left = window.innerWidth - pw - 8;
+  if (top < 8) top = r.bottom + 10;
+  srTtPop.style.cssText += `;left:${left}px;top:${top}px;width:${pw}px`;
+}
+document.addEventListener("click", (e) => {
+  if (!e.target.closest(".tt-btn")) { srTtPop.classList.remove("visible"); srTtActiveBtn = null; }
+});
+document.querySelectorAll("#shift-report-view .tt-btn").forEach(btn => {
+  btn.addEventListener("click", (e) => srShowTooltip(btn, btn.dataset.tt, e));
+});
+
+// ---- Wire up the static controls ----
+document.getElementById("sr-date").valueAsDate = new Date();
+document.getElementById("sr-clear-btn").addEventListener("click", () => srClearForm(false));
+document.getElementById("sr-submit-btn").addEventListener("click", srSubmitToWeek);
+document.getElementById("sr-daily-pdf-btn").addEventListener("click", srDownloadDailyPDF);
+document.getElementById("sr-weekly-pdf-btn").addEventListener("click", srDownloadWeeklyPDF);
 
 /* ============================================================
    BOOT
