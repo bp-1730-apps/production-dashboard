@@ -60,6 +60,9 @@
     --tile-production: #0ca30c;
     --tile-schedule:   #8355e0;
     --tile-report:     #0f9488;
+    --tile-dispatch:   #7c3aed;
+    --tile-safety:     #e11d48;
+    --tile-raw:        #64748b;
   }
 
   * { box-sizing: border-box; }
@@ -418,10 +421,21 @@
     letter-spacing: 0.05em;
   }
 
-  .overview-grid {
+  /* The one scrollable region below the toolbar/summary/shift-card — line
+     cards and the widget board both live inside it and scroll together, so
+     adding a personal widget board under the line grid never has to fight
+     the kiosk's fixed one-screen layout for its own space; it just shares
+     the same internal scrollbox the line grid already had. */
+  .overview-scroll {
     flex: 1 1 auto;
     min-height: 0;
     overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 22px;
+    padding-bottom: 4px;
+  }
+  .overview-grid {
     display: grid;
     /* A fixed 3-column grid (rather than auto-fill-as-many-as-fit) keeps
        cards a substantial, readable size on a wide kiosk display instead
@@ -430,7 +444,6 @@
     grid-template-columns: repeat(3, 1fr);
     gap: 14px;
     align-content: start;
-    padding-bottom: 4px;
   }
   @media (max-width: 1400px) {
     .overview-grid { grid-template-columns: repeat(2, 1fr); }
@@ -498,6 +511,165 @@
     line-height: 1.4;
   }
 
+  /* ---------------- Overview widget board ----------------
+     A personal, per-device "add your own tiles" area under the line grid —
+     same iPhone-app tile look as .stat-strip (rounded, tinted icon badge,
+     soft shadow), but user-built: nothing here is shown unless someone
+     added it, and it only lives in this browser's localStorage. */
+  .widgets-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+  }
+  .widgets-head h2 {
+    margin: 0;
+    font-size: 0.8rem;
+    font-weight: 700;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+  }
+  .widget-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 14px;
+    margin-top: 12px;
+  }
+  @media (max-width: 480px) {
+    .widget-grid { grid-template-columns: 1fr; }
+  }
+  .widget-card {
+    position: relative;
+    border: none;
+    border-radius: var(--radius-tile);
+    box-shadow: 0 1px 3px rgba(16,19,26,0.05), 0 10px 22px rgba(16,19,26,0.07);
+  }
+  .widget-card.editing { padding-top: 46px; }
+  .widget-edit-bar {
+    position: absolute;
+    top: 10px;
+    right: 10px;
+    display: flex;
+    gap: 4px;
+  }
+  .widget-edit-btn {
+    width: 30px;
+    height: 30px;
+    border-radius: 50%;
+    border: none;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.85rem;
+    font-weight: 800;
+    cursor: pointer;
+    background: var(--surface-2);
+    color: var(--text-2);
+    font-family: inherit;
+  }
+  .widget-edit-btn.remove { background: color-mix(in srgb, var(--critical) 14%, transparent); color: var(--critical); }
+  .widget-edit-btn:disabled { opacity: 0.35; cursor: default; }
+  .widget-add-tile {
+    border: 2px dashed var(--border-strong);
+    border-radius: var(--radius-tile);
+    background: transparent;
+    color: var(--text-muted);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    min-height: 120px;
+    cursor: pointer;
+    font-family: inherit;
+    font-weight: 700;
+  }
+  .widget-add-tile:active { transform: scale(0.99); }
+  .widget-add-plus { font-size: 1.8rem; line-height: 1; color: var(--accent); }
+  .widget-empty-note {
+    grid-column: 1 / -1;
+    color: var(--text-muted);
+    font-size: 0.9rem;
+    padding: 4px 2px;
+  }
+  .widget-big-value {
+    font-size: 1.8rem;
+    font-weight: 800;
+    letter-spacing: -0.02em;
+    font-variant-numeric: tabular-nums;
+    line-height: 1;
+  }
+  .widget-sub { font-size: 0.82rem; color: var(--text-muted); margin-top: 6px; line-height: 1.4; }
+  .widget-mini-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+  .widget-mini-grid .mv { font-size: 1.1rem; font-weight: 800; font-variant-numeric: tabular-nums; line-height: 1; }
+  .widget-mini-grid .ml { font-size: 0.64rem; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.04em; margin-top: 4px; }
+  .widget-list { display: flex; flex-direction: column; gap: 4px; }
+  .widget-list-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; font-size: 0.85rem; margin-top: 8px; }
+  .widget-list-row:first-child { margin-top: 0; }
+  .widget-list-row strong { font-variant-numeric: tabular-nums; }
+  .widget-bar-track { height: 6px; border-radius: 4px; background: var(--surface-2); overflow: hidden; margin-top: 3px; }
+  .widget-bar-fill { height: 100%; border-radius: 4px; }
+  .widget-raw-list { display: flex; flex-direction: column; gap: 4px; max-height: 220px; overflow-y: auto; font-size: 0.82rem; }
+  .widget-raw-row { display: flex; justify-content: space-between; gap: 10px; border-bottom: 1px dashed var(--border); padding-bottom: 3px; }
+  .widget-raw-key { color: var(--text-muted); }
+  .widget-raw-val { font-weight: 700; font-variant-numeric: tabular-nums; text-align: right; }
+
+  /* ---------------- Add-widget modal catalog ---------------- */
+  .widget-catalog-item {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    width: 100%;
+    text-align: left;
+    padding: 12px 10px;
+    border: none;
+    border-bottom: 1px solid var(--border);
+    background: transparent;
+    cursor: pointer;
+    font-family: inherit;
+    color: var(--text);
+  }
+  .widget-catalog-item:last-child { border-bottom: none; }
+  .widget-catalog-item:active { background: var(--surface-2); }
+  .widget-catalog-item .tile-icon { width: 30px; height: 30px; }
+  .widget-catalog-item .tile-icon svg { width: 16px; height: 16px; }
+  .widget-catalog-text { flex: 1 1 auto; min-width: 0; }
+  .widget-catalog-label { font-weight: 700; font-size: 0.92rem; }
+  .widget-catalog-desc { font-size: 0.78rem; color: var(--text-muted); margin-top: 2px; line-height: 1.35; }
+  .widget-catalog-chevron { color: var(--text-muted); font-size: 1.1rem; flex: 0 0 auto; }
+  .widget-line-picker-back {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    background: none;
+    border: none;
+    color: var(--accent);
+    font-weight: 700;
+    font-size: 0.88rem;
+    padding: 8px 2px;
+    cursor: pointer;
+    font-family: inherit;
+  }
+  .widget-line-picker-title { font-weight: 700; margin: 4px 0 8px; }
+  .widget-line-picker-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 8px;
+  }
+  .widget-line-picker-grid button {
+    padding: 14px 10px;
+    border-radius: var(--radius-md);
+    border: 1px solid var(--border);
+    background: var(--surface-2);
+    color: var(--text);
+    font-weight: 700;
+    font-family: inherit;
+    cursor: pointer;
+    font-size: 0.95rem;
+  }
+  .widget-line-picker-grid button:active { transform: scale(0.98); }
+
   /* ---------------- Line detail: stat strip + full-width dispatch log ----------------
      Styled like an iPhone app's "Today" summary cards (Health/Fitness-app
      convention): a fixed 2-column grid of equally-weighted tiles, each with
@@ -536,6 +708,9 @@
   .tile-icon.icon-production { background: color-mix(in srgb, var(--tile-production) 14%, transparent); color: var(--tile-production); }
   .tile-icon.icon-schedule   { background: color-mix(in srgb, var(--tile-schedule) 14%, transparent);   color: var(--tile-schedule); }
   .tile-icon.icon-shift-report { background: color-mix(in srgb, var(--tile-report) 14%, transparent);   color: var(--tile-report); }
+  .tile-icon.icon-dispatch   { background: color-mix(in srgb, var(--tile-dispatch) 14%, transparent);   color: var(--tile-dispatch); }
+  .tile-icon.icon-safety     { background: color-mix(in srgb, var(--tile-safety) 14%, transparent);     color: var(--tile-safety); }
+  .tile-icon.icon-raw        { background: color-mix(in srgb, var(--tile-raw) 14%, transparent);        color: var(--tile-raw); }
   @media (max-width: 480px) {
     .stat-strip { grid-template-columns: 1fr; }
   }
@@ -1498,8 +1673,18 @@
         </div>
         <div id="overview-shift-body"><div class="empty-state">Loading…</div></div>
       </section>
-      <div class="overview-grid" id="overview-grid">
-        <div class="empty-state">Loading plant overview…</div>
+      <div class="overview-scroll" id="overview-scroll">
+        <div class="overview-grid" id="overview-grid">
+          <div class="empty-state">Loading plant overview…</div>
+        </div>
+
+        <section id="overview-widgets-section">
+          <div class="widgets-head">
+            <h2>My Widgets</h2>
+            <button type="button" class="btn secondary btn-sm" id="widgets-edit-btn">Customize</button>
+          </div>
+          <div class="widget-grid" id="widget-grid"></div>
+        </section>
       </div>
     </section>
 
@@ -1711,6 +1896,23 @@
         </div>
         <div class="modal-panel-body">
           <div class="sr-shift-log" id="overview-shift-modal-body"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Add-widget picker for the Overview widget board — opened from the
+         board's "+ Add Widget" tile in edit mode. Two steps in one modal:
+         the catalog list, and (for a widget that needs one) a line picker,
+         swapped in place rather than as a separate modal. -->
+    <div class="modal-overlay" id="widget-modal" hidden>
+      <div class="modal-panel" role="dialog" aria-modal="true" aria-labelledby="widget-modal-title">
+        <div class="modal-panel-head">
+          <h2 id="widget-modal-title">Add a Widget</h2>
+          <button type="button" class="modal-close-btn" id="widget-modal-close-btn" aria-label="Close">✕</button>
+        </div>
+        <div class="modal-panel-body">
+          <div id="widget-modal-catalog"></div>
+          <div id="widget-modal-line-picker" hidden></div>
         </div>
       </div>
     </div>
@@ -2104,6 +2306,7 @@ function buildTabs() {
 function setViewMode(newMode, line) {
   closeScheduleModal(); // never leave a modal open across a navigation change
   closeOverviewShiftModal();
+  closeWidgetModal();
   viewMode = newMode;
   if (newMode === "line" && line) currentLine = line;
 
@@ -2163,12 +2366,14 @@ async function refreshOverview() {
       return { line, data: null, error: err.message || String(err) };
     }
   }));
+  lastOverviewResults = results; // the widget board reads from this instead of re-fetching L2L
   renderOverview(results, date);
   document.getElementById("status-line").textContent = isLive
     ? `Plant overview updated ${formatTime(new Date())} · refreshes every ${CONFIG.REFRESH_INTERVAL_MS / 1000}s`
     : `Plant overview updated ${formatTime(new Date())} · showing ${formatDateLabel(date)}`;
   document.getElementById("line-code-label").textContent = `${CONFIG.LINES.length} lines`;
   document.getElementById("overview-live-badge").hidden = !isLive;
+  renderWidgets();
   refreshOverviewShiftCard(date);
 }
 
@@ -3573,6 +3778,7 @@ async function refreshOverviewShiftCard(date) {
   if (!sb) {
     body.innerHTML = `<div class="empty-state">Shift reports aren't connected to Supabase yet.</div>`;
     overviewShiftRows = [];
+    renderWidgets(); // the Safety Events widget reads overviewShiftRows too
     return;
   }
   try {
@@ -3583,6 +3789,7 @@ async function refreshOverviewShiftCard(date) {
 
     if (!overviewShiftRows.length) {
       body.innerHTML = `<div class="empty-state">No shift reports submitted for this date.</div>`;
+      renderWidgets();
       return;
     }
 
@@ -3602,10 +3809,12 @@ async function refreshOverviewShiftCard(date) {
       <div class="mini-stat"><div class="mini-value" style="color:${avgAtt === null ? "var(--text)" : avgAtt >= 90 ? "var(--good)" : avgAtt >= 70 ? "var(--warning)" : "var(--critical)"}">${avgAtt !== null ? avgAtt + "%" : "—"}</div><div class="mini-label">Avg Attainment</div></div>
       <div class="mini-stat"><div class="mini-value" style="color:${safety > 0 ? "var(--warning)" : "var(--good)"}">${safety}</div><div class="mini-label">Safety Events</div></div>
     </div><div class="schedule-mini-note">Tap to view ${n === 1 ? "this shift's" : "these shifts'"} full detail</div>`;
+    renderWidgets();
   } catch (err) {
     console.error(err);
     body.innerHTML = `<div class="empty-state">Could not load shift reports: ${escapeHtml(err.message || String(err))}</div>`;
     overviewShiftRows = [];
+    renderWidgets();
   }
 }
 
@@ -3631,6 +3840,403 @@ overviewShiftModal.addEventListener("click", (e) => {
 });
 document.addEventListener("keydown", (e) => {
   if (e.key === "Escape" && !overviewShiftModal.hidden) closeOverviewShiftModal();
+});
+
+/* ============================================================
+   OVERVIEW WIDGET BOARD
+   ------------------------------------------------------------
+   A personal, per-device "add your own tiles" area at the bottom of
+   Overview — like an iPhone home screen, this is saved to whichever
+   browser is looking at it (localStorage), not to Supabase, so different
+   people/devices can each lay theirs out differently. That's a deliberate
+   difference from the schedule/production-actuals/shift-report data above,
+   which is all shared kiosk state everyone sees the same copy of.
+
+   Every widget type here reads data this dashboard already has in memory
+   — lastOverviewResults (the L2L proxy's per-line OEE/downtime/dispatch
+   response, including raw_daily — the daily-summary row passed through
+   unfiltered, since only two of its fields were ever named and parsed),
+   the shared schedule/production-actuals state, and overviewShiftRows.
+   Adding a widget never triggers a new network call.
+   ============================================================ */
+const WIDGET_STORAGE_KEY = "l2l_overview_widgets_v1";
+
+const WIDGET_CATALOG = [
+  { type: "line-oee", label: "Line OEE", icon: "oee", needsLine: true,
+    desc: "Today's OEE % for one line, with its status color.",
+    title: (name) => `OEE — ${name}` },
+  { type: "line-downtime", label: "Line Downtime", icon: "downtime", needsLine: true,
+    desc: "Downtime minutes and the top reason for one line.",
+    title: (name) => `Downtime — ${name}` },
+  { type: "line-production", label: "Line Production", icon: "production", needsLine: true,
+    desc: "Actual vs. target attainment for one line.",
+    title: (name) => `Production — ${name}` },
+  { type: "schedule-progress", label: "Schedule Progress", icon: "schedule", needsLine: true,
+    desc: "Checklist progress for one line's schedule.",
+    title: (name) => `Schedule — ${name}` },
+  { type: "line-raw", label: "Line — Raw L2L Fields", icon: "raw", needsLine: true,
+    desc: "Every field L2L's API returns for one line, unfiltered — including ones this dashboard doesn't otherwise show.",
+    title: (name) => `Raw L2L Fields — ${name}` },
+  { type: "plant-pareto", label: "Downtime by Reason", icon: "downtime", needsLine: false,
+    desc: "Plant-wide top downtime reasons, ranked by minutes.",
+    title: () => "Downtime by Reason" },
+  { type: "plant-dispatch-status", label: "Dispatch Status", icon: "dispatch", needsLine: false,
+    desc: "Open vs. resolved dispatches, plant-wide.",
+    title: () => "Dispatch Status" },
+  { type: "plant-code-split", label: "Code Red / Yellow Split", icon: "dispatch", needsLine: false,
+    desc: "Minutes split between Code Red and Code Yellow, plant-wide.",
+    title: () => "Code Red / Yellow" },
+  { type: "plant-production", label: "Plant Production", icon: "production", needsLine: false,
+    desc: "Average attainment across every line with a target.",
+    title: () => "Plant Production" },
+  { type: "shift-safety", label: "Safety Events", icon: "safety", needsLine: false,
+    desc: "Unsafe conditions, near misses, and first aid from submitted shift reports.",
+    title: () => "Safety Events" },
+];
+
+const WIDGET_ICONS = {
+  oee: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"></polyline></svg>',
+  downtime: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>',
+  production: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path><polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline><line x1="12" y1="22.08" x2="12" y2="12"></line></svg>',
+  schedule: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect><line x1="16" y1="2" x2="16" y2="6"></line><line x1="8" y1="2" x2="8" y2="6"></line><line x1="3" y1="10" x2="21" y2="10"></line></svg>',
+  dispatch: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path><line x1="12" y1="9" x2="12" y2="13"></line><line x1="12" y1="17" x2="12.01" y2="17"></line></svg>',
+  safety: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path></svg>',
+  raw: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="12" cy="5" rx="9" ry="3"></ellipse><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"></path><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"></path></svg>',
+};
+
+let lastOverviewResults = []; // [{line, data, error}, ...] from the most recent refreshOverview() — widgets read this instead of re-fetching L2L
+let widgetEditMode = false;
+
+function defaultWidgets() {
+  // A small starter set so the board isn't empty the first time someone
+  // opens Overview — nothing here is special, both can be removed the same
+  // way as anything a user adds themselves.
+  return [
+    { instId: "w-default-1", type: "plant-pareto" },
+    { instId: "w-default-2", type: "plant-dispatch-status" },
+  ];
+}
+function loadWidgets() {
+  try {
+    const raw = localStorage.getItem(WIDGET_STORAGE_KEY);
+    if (!raw) return defaultWidgets();
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed : defaultWidgets();
+  } catch {
+    return defaultWidgets();
+  }
+}
+function saveWidgets() {
+  try { localStorage.setItem(WIDGET_STORAGE_KEY, JSON.stringify(widgets)); } catch { /* best-effort — a full or blocked localStorage just means the board resets next visit */ }
+}
+function newWidgetId() {
+  return "w" + Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
+}
+let widgets = loadWidgets();
+
+function widgetLineData(lineCode) {
+  const r = lastOverviewResults.find(r => r.line.code === lineCode);
+  return r && r.data ? r.data : null;
+}
+function emptyWidgetNote(msg) {
+  return `<div class="widget-sub" style="margin-top:0">${escapeHtml(msg)}</div>`;
+}
+
+function widgetLineOee(line) {
+  if (!line) return emptyWidgetNote("Pick a line.");
+  const data = widgetLineData(line.code);
+  if (!data) return emptyWidgetNote("No data for this line right now.");
+  const oee = round1(data.oee);
+  const { color, label } = statusFor(oee);
+  return `
+    <div class="widget-big-value" style="color:${color}">${oee}%</div>
+    <div class="widget-sub" style="color:${color}">${escapeHtml(label)}</div>`;
+}
+function widgetLineDowntime(line) {
+  if (!line) return emptyWidgetNote("Pick a line.");
+  const data = widgetLineData(line.code);
+  if (!data) return emptyWidgetNote("No data for this line right now.");
+  const byReason = {};
+  (data.dispatches || []).forEach(d => { byReason[d.reason] = (byReason[d.reason] || 0) + (Number(d.minutes) || 0); });
+  const top = Object.entries(byReason).sort((a, b) => b[1] - a[1])[0];
+  return `
+    <div class="widget-big-value">${round1(data.total_dt)}</div>
+    <div class="widget-sub">minutes${top ? ` · top reason: ${escapeHtml(top[0])} (${round1(top[1])} min)` : ""}</div>`;
+}
+function widgetLineProduction(line) {
+  if (!line) return emptyWidgetNote("Pick a line.");
+  const date = overviewDate;
+  const target = computeScheduleTargets(line.name, date);
+  if (!target || (!target.cases && !target.lbs)) return emptyWidgetNote("No schedule target for this line on this date.");
+  const actual = productionActuals[actualKey(line, date)] || {};
+  const pct = attainmentPct(target, actual);
+  const { color, label } = attainmentStatus(pct);
+  const clamped = Math.max(0, Math.min(100, pct));
+  return `
+    <div class="widget-big-value" style="color:${color}">${round1(pct)}%</div>
+    <div class="widget-sub" style="color:${color}">${escapeHtml(label)}</div>
+    <div class="widget-bar-track"><div class="widget-bar-fill" style="width:${clamped}%;background:${color}"></div></div>`;
+}
+function widgetScheduleProgress(line) {
+  if (!line) return emptyWidgetNote("Pick a line.");
+  const date = overviewDate;
+  const block = scheduleBlocks.find(b => b.lineCode === line.name.toUpperCase() && b.date === date);
+  if (!block || !block.items.length) return emptyWidgetNote("No schedule uploaded for this line on this date.");
+  const total = block.items.length;
+  const done = block.items.filter((item, idx) => scheduleCompleted[scheduleItemKey(block, item, idx)]).length;
+  const pct = total ? Math.round((done / total) * 100) : 0;
+  const color = pct >= 100 ? "var(--good)" : "var(--accent)";
+  return `
+    <div class="widget-big-value" style="color:${color}">${done} / ${total}</div>
+    <div class="widget-sub">items complete</div>
+    <div class="widget-bar-track"><div class="widget-bar-fill" style="width:${pct}%;background:${color}"></div></div>`;
+}
+function widgetLineRaw(line) {
+  if (!line) return emptyWidgetNote("Pick a line.");
+  const data = widgetLineData(line.code);
+  if (!data) return emptyWidgetNote("No data for this line right now.");
+  const row = Array.isArray(data.raw_daily) && data.raw_daily.length ? data.raw_daily[0] : null;
+  if (!row) return emptyWidgetNote("L2L didn't return a daily-summary row for this line/date.");
+  const rowsHtml = Object.entries(row).map(([key, val]) => {
+    const label = key.replace(/_/g, " ").replace(/\b\w/g, c => c.toUpperCase());
+    let display;
+    if (val === null || val === undefined) display = "—";
+    else if (typeof val === "number") display = val.toLocaleString(undefined, { maximumFractionDigits: 3 });
+    else if (typeof val === "object") display = escapeHtml(JSON.stringify(val));
+    else display = escapeHtml(String(val));
+    return `<div class="widget-raw-row"><span class="widget-raw-key">${escapeHtml(label)}</span><span class="widget-raw-val">${display}</span></div>`;
+  }).join("");
+  return `<div class="widget-raw-list">${rowsHtml}</div>`;
+}
+function widgetPlantPareto() {
+  const byReason = {};
+  lastOverviewResults.forEach(r => {
+    if (!r.data) return;
+    (r.data.dispatches || []).forEach(d => { byReason[d.reason] = (byReason[d.reason] || 0) + (Number(d.minutes) || 0); });
+  });
+  const entries = Object.entries(byReason).sort((a, b) => b[1] - a[1]).slice(0, 5);
+  if (!entries.length) return emptyWidgetNote("No downtime logged yet.");
+  const max = entries[0][1] || 1;
+  const rows = entries.map(([reason, mins]) => `
+    <div class="widget-list-row"><span>${escapeHtml(reason)}</span><strong>${round1(mins)} min</strong></div>
+    <div class="widget-bar-track"><div class="widget-bar-fill" style="width:${Math.max(4, mins / max * 100)}%;background:var(--tile-downtime)"></div></div>`).join("");
+  return `<div class="widget-list">${rows}</div>`;
+}
+function widgetPlantDispatchStatus() {
+  let open = 0, resolved = 0, unknown = 0;
+  lastOverviewResults.forEach(r => {
+    if (!r.data) return;
+    (r.data.dispatches || []).forEach(d => {
+      if (d.status_key === "open") open++;
+      else if (d.status_key === "resolved") resolved++;
+      else unknown++;
+    });
+  });
+  if (!open && !resolved && !unknown) return emptyWidgetNote("No dispatches logged yet.");
+  return `
+    <div class="widget-mini-grid">
+      <div><div class="mv" style="color:var(--critical)">${open}</div><div class="ml">Open</div></div>
+      <div><div class="mv" style="color:var(--good)">${resolved}</div><div class="ml">Resolved</div></div>
+      <div><div class="mv">${unknown}</div><div class="ml">Unknown</div></div>
+    </div>`;
+}
+function widgetPlantCodeSplit() {
+  let redMin = 0, yellowMin = 0, otherMin = 0, redN = 0, yellowN = 0, otherN = 0;
+  lastOverviewResults.forEach(r => {
+    if (!r.data) return;
+    (r.data.dispatches || []).forEach(d => {
+      const m = Number(d.minutes) || 0;
+      if (d.type_key === "red") { redMin += m; redN++; }
+      else if (d.type_key === "yellow") { yellowMin += m; yellowN++; }
+      else { otherMin += m; otherN++; }
+    });
+  });
+  if (!redN && !yellowN && !otherN) return emptyWidgetNote("No dispatches logged yet.");
+  return `
+    <div class="widget-mini-grid">
+      <div><div class="mv" style="color:var(--critical)">${round1(redMin)}</div><div class="ml">Red min (${redN})</div></div>
+      <div><div class="mv" style="color:var(--warning)">${round1(yellowMin)}</div><div class="ml">Yellow min (${yellowN})</div></div>
+      <div><div class="mv">${round1(otherMin)}</div><div class="ml">Other min (${otherN})</div></div>
+    </div>`;
+}
+function widgetPlantProduction() {
+  const date = overviewDate;
+  const pcts = [];
+  CONFIG.LINES.forEach(line => {
+    const target = computeScheduleTargets(line.name, date);
+    if (!target || (!target.cases && !target.lbs)) return;
+    const actual = productionActuals[actualKey(line, date)] || {};
+    pcts.push(attainmentPct(target, actual));
+  });
+  if (!pcts.length) return emptyWidgetNote("No lines have a schedule target for this date.");
+  const avg = pcts.reduce((a, b) => a + b, 0) / pcts.length;
+  const { color, label } = attainmentStatus(avg);
+  const clamped = Math.max(0, Math.min(100, avg));
+  return `
+    <div class="widget-big-value" style="color:${color}">${round1(avg)}%</div>
+    <div class="widget-sub" style="color:${color}">${escapeHtml(label)} · ${pcts.length} of ${CONFIG.LINES.length} lines with a target</div>
+    <div class="widget-bar-track"><div class="widget-bar-fill" style="width:${clamped}%;background:${color}"></div></div>`;
+}
+function widgetShiftSafety() {
+  if (!overviewShiftRows.length) return emptyWidgetNote("No shift reports submitted for this date.");
+  let uc = 0, nm = 0, fa = 0;
+  overviewShiftRows.forEach(r => { uc += r.unsafe_conditions || 0; nm += r.near_misses || 0; fa += r.first_aid || 0; });
+  const total = uc + nm + fa;
+  return `
+    <div class="widget-mini-grid">
+      <div><div class="mv" style="color:${uc ? "var(--warning)" : "var(--good)"}">${uc}</div><div class="ml">Unsafe Cond.</div></div>
+      <div><div class="mv" style="color:${nm ? "var(--warning)" : "var(--good)"}">${nm}</div><div class="ml">Near Misses</div></div>
+      <div><div class="mv" style="color:${fa ? "var(--critical)" : "var(--good)"}">${fa}</div><div class="ml">First Aid</div></div>
+    </div>
+    <div class="widget-sub">${total} total across ${overviewShiftRows.length} shift${overviewShiftRows.length !== 1 ? "s" : ""}</div>`;
+}
+
+function buildWidgetBody(w, line) {
+  switch (w.type) {
+    case "line-oee": return widgetLineOee(line);
+    case "line-downtime": return widgetLineDowntime(line);
+    case "line-production": return widgetLineProduction(line);
+    case "schedule-progress": return widgetScheduleProgress(line);
+    case "line-raw": return widgetLineRaw(line);
+    case "plant-pareto": return widgetPlantPareto();
+    case "plant-dispatch-status": return widgetPlantDispatchStatus();
+    case "plant-code-split": return widgetPlantCodeSplit();
+    case "plant-production": return widgetPlantProduction();
+    case "shift-safety": return widgetShiftSafety();
+    default: return emptyWidgetNote("This widget type isn't recognized — it may have been removed in a dashboard update.");
+  }
+}
+
+function renderWidgetCard(w, idx) {
+  const def = WIDGET_CATALOG.find(d => d.type === w.type);
+  if (!def) return "";
+  const line = w.line ? CONFIG.LINES.find(l => l.code === w.line) : null;
+  const title = def.title(line ? line.name : "?");
+  const bodyHtml = buildWidgetBody(w, line);
+  const editBar = widgetEditMode ? `
+    <div class="widget-edit-bar">
+      <button type="button" class="widget-edit-btn move-up" data-inst="${w.instId}" ${idx === 0 ? "disabled" : ""} aria-label="Move up">↑</button>
+      <button type="button" class="widget-edit-btn move-down" data-inst="${w.instId}" ${idx === widgets.length - 1 ? "disabled" : ""} aria-label="Move down">↓</button>
+      <button type="button" class="widget-edit-btn remove" data-inst="${w.instId}" aria-label="Remove widget">✕</button>
+    </div>` : "";
+  return `
+    <section class="card widget-card${widgetEditMode ? " editing" : ""}">
+      ${editBar}
+      <div class="tile-head">
+        <span class="tile-icon icon-${def.icon}" aria-hidden="true">${WIDGET_ICONS[def.icon]}</span>
+        <h2>${escapeHtml(title)}</h2>
+      </div>
+      ${bodyHtml}
+    </section>`;
+}
+
+function renderWidgets() {
+  const grid = document.getElementById("widget-grid");
+  if (!grid) return; // called before the Overview markup exists — nothing to draw into
+
+  let html = widgets.map((w, idx) => renderWidgetCard(w, idx)).join("");
+  if (!widgets.length) {
+    html = `<div class="widget-empty-note">No widgets yet — tap Customize, then Add Widget, to build your own board.</div>`;
+  }
+  if (widgetEditMode) {
+    html += `<button type="button" class="widget-add-tile" id="widget-add-btn"><span class="widget-add-plus">+</span><span>Add Widget</span></button>`;
+  }
+  grid.innerHTML = html;
+
+  grid.querySelectorAll(".widget-edit-btn.remove").forEach(btn => {
+    btn.addEventListener("click", (e) => { e.stopPropagation(); removeWidget(btn.dataset.inst); });
+  });
+  grid.querySelectorAll(".widget-edit-btn.move-up").forEach(btn => {
+    btn.addEventListener("click", (e) => { e.stopPropagation(); moveWidget(btn.dataset.inst, -1); });
+  });
+  grid.querySelectorAll(".widget-edit-btn.move-down").forEach(btn => {
+    btn.addEventListener("click", (e) => { e.stopPropagation(); moveWidget(btn.dataset.inst, 1); });
+  });
+  const addBtn = document.getElementById("widget-add-btn");
+  if (addBtn) addBtn.addEventListener("click", openWidgetModal);
+}
+
+function removeWidget(instId) {
+  widgets = widgets.filter(w => w.instId !== instId);
+  saveWidgets();
+  renderWidgets();
+}
+function moveWidget(instId, dir) {
+  const idx = widgets.findIndex(w => w.instId === instId);
+  if (idx < 0) return;
+  const swapWith = idx + dir;
+  if (swapWith < 0 || swapWith >= widgets.length) return;
+  [widgets[idx], widgets[swapWith]] = [widgets[swapWith], widgets[idx]];
+  saveWidgets();
+  renderWidgets();
+}
+function addWidget(type, lineCode) {
+  widgets.push({ instId: newWidgetId(), type, line: lineCode || undefined });
+  saveWidgets();
+  renderWidgets();
+  closeWidgetModal();
+}
+
+const widgetsEditBtn = document.getElementById("widgets-edit-btn");
+widgetsEditBtn.addEventListener("click", () => {
+  widgetEditMode = !widgetEditMode;
+  widgetsEditBtn.textContent = widgetEditMode ? "Done" : "Customize";
+  renderWidgets();
+});
+
+const widgetModal = document.getElementById("widget-modal");
+const widgetModalCloseBtn = document.getElementById("widget-modal-close-btn");
+const widgetModalCatalog = document.getElementById("widget-modal-catalog");
+const widgetModalLinePicker = document.getElementById("widget-modal-line-picker");
+
+function openWidgetModal() {
+  renderWidgetCatalog();
+  widgetModal.hidden = false;
+}
+function closeWidgetModal() {
+  widgetModal.hidden = true;
+}
+function renderWidgetCatalog() {
+  widgetModalCatalog.hidden = false;
+  widgetModalLinePicker.hidden = true;
+  widgetModalCatalog.innerHTML = WIDGET_CATALOG.map(def => `
+    <button type="button" class="widget-catalog-item" data-type="${def.type}">
+      <span class="tile-icon icon-${def.icon}" aria-hidden="true">${WIDGET_ICONS[def.icon]}</span>
+      <span class="widget-catalog-text">
+        <span class="widget-catalog-label">${escapeHtml(def.label)}</span>
+        <span class="widget-catalog-desc">${escapeHtml(def.desc)}</span>
+      </span>
+      <span class="widget-catalog-chevron">${def.needsLine ? "›" : "+"}</span>
+    </button>`).join("");
+  widgetModalCatalog.querySelectorAll(".widget-catalog-item").forEach(btn => {
+    btn.addEventListener("click", () => {
+      const def = WIDGET_CATALOG.find(d => d.type === btn.dataset.type);
+      if (!def) return;
+      if (def.needsLine) renderWidgetLinePicker(def);
+      else addWidget(def.type, null);
+    });
+  });
+}
+function renderWidgetLinePicker(def) {
+  widgetModalCatalog.hidden = true;
+  widgetModalLinePicker.hidden = false;
+  widgetModalLinePicker.innerHTML = `
+    <button type="button" class="widget-line-picker-back" id="widget-line-picker-back">‹ Back</button>
+    <div class="widget-line-picker-title">${escapeHtml(def.label)} — pick a line</div>
+    <div class="widget-line-picker-grid">
+      ${CONFIG.LINES.map(l => `<button type="button" data-code="${escapeHtml(l.code)}">${escapeHtml(l.name)}</button>`).join("")}
+    </div>`;
+  document.getElementById("widget-line-picker-back").addEventListener("click", renderWidgetCatalog);
+  widgetModalLinePicker.querySelectorAll(".widget-line-picker-grid button").forEach(btn => {
+    btn.addEventListener("click", () => addWidget(def.type, btn.dataset.code));
+  });
+}
+widgetModalCloseBtn.addEventListener("click", closeWidgetModal);
+widgetModal.addEventListener("click", (e) => {
+  if (e.target === widgetModal) closeWidgetModal();
+});
+document.addEventListener("keydown", (e) => {
+  if (e.key === "Escape" && !widgetModal.hidden) closeWidgetModal();
 });
 
 // ---- Weekly pace strip — reads eos_weekly_targets for the current week;
