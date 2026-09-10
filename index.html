@@ -59,6 +59,7 @@
     --tile-downtime:   #e8720c;
     --tile-production: #0ca30c;
     --tile-schedule:   #8355e0;
+    --tile-report:     #0f9488;
   }
 
   * { box-sizing: border-box; }
@@ -286,25 +287,25 @@
     display: flex;
     flex-direction: column;
   }
-  #overview-view, #line-view, #shift-report-view {
+  #overview-view, #line-view, #shift-report-view, #archive-view {
     flex: 1 1 auto;
     min-height: 0;
     display: flex;
     flex-direction: column;
     gap: 14px;
   }
-  #overview-view[hidden], #line-view[hidden], #shift-report-view[hidden] { display: none; }
-  /* The shift report is a long form meant to be scrolled, on any screen
-     size — unlike the rest of the kiosk it was never meant to fit in one
-     screen, so it always gets normal page scrolling, even above the
-     1400px breakpoint where the rest of the app stays a fixed, non-
-     scrolling "everything fits on one screen" kiosk view. */
-  body:has(#shift-report-view:not([hidden])) {
+  #overview-view[hidden], #line-view[hidden], #shift-report-view[hidden], #archive-view[hidden] { display: none; }
+  /* The shift report and archive are long, scroll-meant-to-happen views on
+     any screen size — unlike the rest of the kiosk they were never meant
+     to fit in one screen, so they always get normal page scrolling, even
+     above the 1400px breakpoint where the rest of the app stays a fixed,
+     non-scrolling "everything fits on one screen" kiosk view. */
+  body:has(#shift-report-view:not([hidden])), body:has(#archive-view:not([hidden])) {
     height: auto;
     min-height: 100%;
     overflow: auto;
   }
-  body:has(#shift-report-view:not([hidden])) #app {
+  body:has(#shift-report-view:not([hidden])) #app, body:has(#archive-view:not([hidden])) #app {
     height: auto;
     min-height: 100%;
   }
@@ -348,12 +349,50 @@
     flex: 0 0 auto;
     display: flex;
     align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+  }
+  .overview-toolbar input[type="date"] {
+    min-height: 46px;
+    padding: 6px 12px;
+    border-radius: var(--radius-md);
+    border: 1px solid var(--border);
+    background: var(--surface);
+    color: var(--text);
+    font-family: inherit;
+    font-size: 0.95rem;
+    box-shadow: var(--shadow-sm);
+  }
+  .btn.btn-sm { min-height: 34px; padding: 5px 14px; font-size: 0.8rem; }
+  /* Shown only when the Overview date picker is on today — the visual cue
+     that this view is auto-refreshing that used to live in the "Live"
+     button's pressed state. */
+  .overview-live-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 0.8rem;
+    font-weight: 700;
+    color: var(--good);
+  }
+  .overview-live-badge::before {
+    content: "";
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--good);
   }
   .overview-summary {
     flex: 0 0 auto;
     display: grid;
     grid-template-columns: repeat(4, 1fr);
     gap: 12px;
+  }
+  .overview-shift-metrics {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 12px;
+    margin-bottom: 8px;
   }
   .mini-stat {
     background: var(--surface);
@@ -496,6 +535,7 @@
   .tile-icon.icon-downtime   { background: color-mix(in srgb, var(--tile-downtime) 14%, transparent);   color: var(--tile-downtime); }
   .tile-icon.icon-production { background: color-mix(in srgb, var(--tile-production) 14%, transparent); color: var(--tile-production); }
   .tile-icon.icon-schedule   { background: color-mix(in srgb, var(--tile-schedule) 14%, transparent);   color: var(--tile-schedule); }
+  .tile-icon.icon-shift-report { background: color-mix(in srgb, var(--tile-report) 14%, transparent);   color: var(--tile-report); }
   @media (max-width: 480px) {
     .stat-strip { grid-template-columns: 1fr; }
   }
@@ -534,10 +574,10 @@
     html, body { height: auto; min-height: 100%; overflow: auto; }
     #app { height: auto; min-height: 100%; }
 
-    .overview-summary { grid-template-columns: repeat(2, 1fr); }
+    .overview-summary, .overview-shift-metrics { grid-template-columns: repeat(2, 1fr); }
   }
   @media (max-width: 640px) {
-    .overview-summary { grid-template-columns: 1fr 1fr; }
+    .overview-summary, .overview-shift-metrics { grid-template-columns: 1fr 1fr; }
     .prod-grid { grid-template-columns: 1fr; }
   }
 
@@ -1275,6 +1315,16 @@
   .sr-se-toggle.open { transform: rotate(180deg); }
   .sr-shift-entry-body { display: none; border-top: 1px solid var(--border); overflow-x: auto; }
   .sr-shift-entry-body.open { display: block; }
+  .sr-shift-entry-print {
+    padding: 8px 14px 10px;
+    border-top: 1px solid var(--border);
+    display: flex;
+    justify-content: flex-end;
+  }
+  /* Archive: a week entry's body holds nested shift entries (padded, since
+     it's one level deeper than the Weekly Accumulator's own top-level
+     list) rather than a table directly. */
+  .sr-shift-log.nested { padding: 10px 14px; }
 
   /* ---- Tooltip popover ---- */
   .tt-wrap { display: inline-flex; align-items: center; }
@@ -1434,12 +1484,20 @@
     <!-- ---------------- Overview: plant-wide landing view ---------------- -->
     <section id="overview-view">
       <div class="overview-toolbar">
-        <div class="segmented" role="group" aria-label="Overview period">
-          <button type="button" id="overview-live-btn" aria-pressed="true">Live</button>
-          <button type="button" id="overview-yesterday-btn" aria-pressed="false">Yesterday</button>
-        </div>
+        <input type="date" id="overview-date-input" aria-label="Overview date">
+        <button type="button" class="btn secondary btn-sm" id="overview-today-btn">Today</button>
+        <span class="overview-live-badge" id="overview-live-badge" hidden>Live</span>
       </div>
       <div class="overview-summary" id="overview-summary"></div>
+      <section class="card clickable" id="overview-shift-card" hidden>
+        <div class="tile-head">
+          <span class="tile-icon icon-shift-report" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 5H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2"></path><rect x="9" y="3" width="6" height="4" rx="2" ry="2"></rect></svg>
+          </span>
+          <h2>Shift Reports — <span id="overview-shift-date-label">Today</span></h2>
+        </div>
+        <div id="overview-shift-body"><div class="empty-state">Loading…</div></div>
+      </section>
       <div class="overview-grid" id="overview-grid">
         <div class="empty-state">Loading plant overview…</div>
       </div>
@@ -1634,6 +1692,29 @@
 
     </section>
 
+    <!-- ---------------- Archive: every shift report ever submitted, grouped by week ---------------- -->
+    <section id="archive-view" hidden>
+      <section class="card">
+        <div class="tile-head"><h2>Shift Report Archive</h2></div>
+        <div id="archive-body"><div class="empty-state">Loading…</div></div>
+      </section>
+    </section>
+
+    <!-- Overview's "Shift Reports" tile modal — opened by tapping the tile
+         above the line grid. Lists every shift submitted for whichever date
+         the Overview date picker is currently showing. -->
+    <div class="modal-overlay" id="overview-shift-modal" hidden>
+      <div class="modal-panel" role="dialog" aria-modal="true" aria-labelledby="overview-shift-modal-title">
+        <div class="modal-panel-head">
+          <h2 id="overview-shift-modal-title">Shift Reports — <span id="overview-shift-modal-date">Today</span></h2>
+          <button type="button" class="modal-close-btn" id="overview-shift-modal-close-btn" aria-label="Close">✕</button>
+        </div>
+        <div class="modal-panel-body">
+          <div class="sr-shift-log" id="overview-shift-modal-body"></div>
+        </div>
+      </div>
+    </div>
+
     <!-- Today's Schedule modal — opened by tapping the compact tile above.
          Holds the exact same upload/day-picker/checklist content that used
          to sit permanently in a card; nothing about how it works changed,
@@ -1749,7 +1830,7 @@ let lastGoodAt = null;
 let refreshTimer = null;
 let overviewTimer = null;
 let viewMode = "overview"; // "overview" | "line" — the dashboard opens on the plant-wide view
-let overviewMode = "live"; // "live" | "yesterday" — which day the Overview tab is showing
+let overviewDate = todayStr(); // ISO date the Overview tab is showing — auto-refreshes only while this is today
 let mode = "live";         // "live" | "yesterday" | "range" — only meaningful once a line is open
 let rangeStart = null;     // "YYYY-MM-DD", set once the user hits View
 let rangeEnd = null;
@@ -1992,6 +2073,14 @@ function buildTabs() {
   shiftReportBtn.addEventListener("click", () => setViewMode("shift-report"));
   nav.appendChild(shiftReportBtn);
 
+  const archiveBtn = document.createElement("button");
+  archiveBtn.type = "button";
+  archiveBtn.textContent = "Archive";
+  archiveBtn.setAttribute("role", "tab");
+  archiveBtn.setAttribute("aria-selected", viewMode === "archive" ? "true" : "false");
+  archiveBtn.addEventListener("click", () => setViewMode("archive"));
+  nav.appendChild(archiveBtn);
+
   const divider = document.createElement("div");
   divider.className = "tab-divider";
   nav.appendChild(divider);
@@ -2013,25 +2102,31 @@ function buildTabs() {
 // this one call so the two views can never both be "live" at once wasting
 // requests on a Pi that's only showing one of them.
 function setViewMode(newMode, line) {
-  closeScheduleModal(); // never leave the schedule modal open across a navigation change
+  closeScheduleModal(); // never leave a modal open across a navigation change
+  closeOverviewShiftModal();
   viewMode = newMode;
   if (newMode === "line" && line) currentLine = line;
 
   document.getElementById("overview-view").hidden = viewMode !== "overview";
   document.getElementById("line-view").hidden = viewMode !== "line";
   document.getElementById("shift-report-view").hidden = viewMode !== "shift-report";
+  document.getElementById("archive-view").hidden = viewMode !== "archive";
   document.getElementById("mode-row").hidden = viewMode !== "line";
   buildTabs();
 
   if (viewMode === "overview") {
     stopAutoRefresh();
     refreshOverview();
-    if (overviewMode === "live") startOverviewAutoRefresh(); else stopOverviewAutoRefresh();
+    if (overviewDate === todayStr()) startOverviewAutoRefresh(); else stopOverviewAutoRefresh();
   } else if (viewMode === "shift-report") {
     stopAutoRefresh();
     stopOverviewAutoRefresh();
     srLoadWeekPanel();
     srLoadPaceStrip();
+  } else if (viewMode === "archive") {
+    stopAutoRefresh();
+    stopOverviewAutoRefresh();
+    srLoadArchive();
   } else {
     stopOverviewAutoRefresh();
     resetLoadingState();
@@ -2058,7 +2153,8 @@ function selectLine(line) {
    card as offline instead of blanking the whole page.
    ============================================================ */
 async function refreshOverview() {
-  const date = overviewMode === "yesterday" ? yesterdayStr() : todayStr();
+  const date = overviewDate;
+  const isLive = date === todayStr();
   const results = await Promise.all(CONFIG.LINES.map(async line => {
     try {
       const data = await fetchLineMetrics(line, date, date);
@@ -2068,10 +2164,12 @@ async function refreshOverview() {
     }
   }));
   renderOverview(results, date);
-  document.getElementById("status-line").textContent = overviewMode === "yesterday"
-    ? `Plant overview updated ${formatTime(new Date())} · showing Yesterday`
-    : `Plant overview updated ${formatTime(new Date())} · refreshes every ${CONFIG.REFRESH_INTERVAL_MS / 1000}s`;
+  document.getElementById("status-line").textContent = isLive
+    ? `Plant overview updated ${formatTime(new Date())} · refreshes every ${CONFIG.REFRESH_INTERVAL_MS / 1000}s`
+    : `Plant overview updated ${formatTime(new Date())} · showing ${formatDateLabel(date)}`;
   document.getElementById("line-code-label").textContent = `${CONFIG.LINES.length} lines`;
+  document.getElementById("overview-live-badge").hidden = !isLive;
+  refreshOverviewShiftCard(date);
 }
 
 function renderOverview(results, date) {
@@ -2155,21 +2253,28 @@ function stopOverviewAutoRefresh() {
   overviewTimer = null;
 }
 
-const overviewLiveBtn = document.getElementById("overview-live-btn");
-const overviewYesterdayBtn = document.getElementById("overview-yesterday-btn");
+const overviewDateInput = document.getElementById("overview-date-input");
+const overviewTodayBtn = document.getElementById("overview-today-btn");
 
-function setOverviewMode(newMode) {
-  overviewMode = newMode;
-  overviewLiveBtn.setAttribute("aria-pressed", overviewMode === "live" ? "true" : "false");
-  overviewYesterdayBtn.setAttribute("aria-pressed", overviewMode === "yesterday" ? "true" : "false");
+// A date picker replaces the old Live/Yesterday toggle — any day is one
+// tap away instead of just those two. "Live" isn't a separate mode
+// anymore, it's just what picking today's date gets you: auto-refresh
+// switches on exactly when the selected date is today (see the
+// overview-live-badge dot this drives) and off for anything else, same
+// reasoning as the line-detail Yesterday toggle — no point polling every
+// 60s for a day that's already over.
+function setOverviewDate(newDate) {
+  overviewDate = newDate;
+  overviewDateInput.value = newDate;
   refreshOverview();
-  // Yesterday's plant-wide numbers are finished, same reasoning as the
-  // line-detail Yesterday toggle — no point polling every 60s for a day
-  // that's already over.
-  if (overviewMode === "live") startOverviewAutoRefresh(); else stopOverviewAutoRefresh();
+  if (overviewDate === todayStr()) startOverviewAutoRefresh(); else stopOverviewAutoRefresh();
 }
-overviewLiveBtn.addEventListener("click", () => setOverviewMode("live"));
-overviewYesterdayBtn.addEventListener("click", () => setOverviewMode("yesterday"));
+overviewDateInput.max = todayStr(); // no picking a date that hasn't happened yet
+overviewDateInput.value = overviewDate;
+overviewDateInput.addEventListener("change", () => {
+  if (overviewDateInput.value) setOverviewDate(overviewDateInput.value);
+});
+overviewTodayBtn.addEventListener("click", () => setOverviewDate(todayStr()));
 
 /* ============================================================
    MODE TOGGLE (Live / Date Range) — line detail only
@@ -3249,6 +3354,126 @@ function srClearForm(silent) {
 // ---- Weekly accumulator panel — everyone viewing the dashboard sees the
 // same Monday–Sunday total, reloaded every time the Shift Report tab is
 // opened (see setViewMode's "shift-report" branch) ----
+// Every fetched shift row gets registered here by its real Supabase id
+// (the eos_production_shifts primary key), so any "Print Daily Report"
+// button rendered anywhere — Weekly Accumulator, Archive, or the Overview
+// shift modal — can rebuild that exact shift's PDF without a re-fetch or
+// having to smuggle the row's JSON through an onclick attribute.
+const srRowRegistry = new Map();
+
+// One shift's collapsible row — used by the Weekly Accumulator, the
+// Archive (nested one level inside a week entry), and the Overview tab's
+// "Shift Reports" modal, so all three read identically and share one
+// place to fix if the format ever needs to change.
+function srRenderShiftEntry(r) {
+  const att = r.cases_planned > 0 ? Math.round((r.cases_produced / r.cases_planned) * 100 * SR_PE) : null;
+  let rowsHtml = "";
+  (r.lines || []).forEach(l => {
+    const lv = l.lbs_variance || 0, cv = l.cases_variance || 0;
+    rowsHtml += `<tr>
+      <td style="font-weight:800;color:var(--accent)">${escapeHtml(l.line)}</td>
+      <td class="c">${(l.lbs_planned || 0).toLocaleString()}</td><td class="c">${(l.lbs_produced || 0).toLocaleString()}</td>
+      <td class="c" style="color:${lv >= 0 ? "var(--good)" : "var(--critical)"};font-weight:700">${lv > 0 ? "+" : ""}${lv.toLocaleString()}</td>
+      <td class="c">${(l.cases_planned || 0).toLocaleString()}</td><td class="c">${(l.cases_produced || 0).toLocaleString()}</td>
+      <td class="c" style="color:${cv >= 0 ? "var(--good)" : "var(--critical)"};font-weight:700">${cv > 0 ? "+" : ""}${cv.toLocaleString()}</td>
+      <td style="font-size:0.8rem;color:var(--text-muted)">${escapeHtml(l.notes || "")}</td>
+    </tr>`;
+  });
+  return `<div class="sr-shift-entry">
+    <div class="sr-shift-entry-hdr" onclick="srToggleEntryEl(this)">
+      <div class="sr-se-meta"><span class="sr-se-date">${srFullDate(r.shift_date)}</span><span class="sr-se-sup">${escapeHtml(r.supervisor || "—")}</span></div>
+      <div class="sr-se-kpis">
+        <span class="pill" style="background:var(--surface-2)">Cs: ${(r.cases_produced || 0).toLocaleString()} / ${(r.cases_planned || 0).toLocaleString()}</span>
+        <span class="pill" style="background:${(r.cases_variance || 0) >= 0 ? colorMix("var(--good)", 0.16) : "rgba(208,59,59,0.12)"};color:${(r.cases_variance || 0) >= 0 ? "var(--good)" : "var(--critical)"}">Cs Var: ${(r.cases_variance || 0) > 0 ? "+" : ""}${(r.cases_variance || 0).toLocaleString()}</span>
+        ${att !== null ? `<span class="pill" style="background:${att >= 90 ? colorMix("var(--good)", 0.16) : att >= 70 ? colorMix("var(--warning)", 0.2) : "rgba(208,59,59,0.12)"};color:${att >= 90 ? "var(--good)" : att >= 70 ? "#92610a" : "var(--critical)"}">${att}%</span>` : ""}
+      </div>
+      <span class="sr-se-toggle">▼</span>
+    </div>
+    <div class="sr-shift-entry-body">
+      <table class="dispatch-table"><thead><tr>
+        <th>Line</th><th class="c">Lbs Pl</th><th class="c">Lbs Ac</th><th class="c">Lbs Var</th>
+        <th class="c">Cs Pl</th><th class="c">Cs Ac</th><th class="c">Cs Var</th><th>Notes</th>
+      </tr></thead><tbody>${rowsHtml}</tbody></table>
+      <div class="sr-shift-entry-print"><button type="button" class="btn secondary btn-sm" onclick="srPrintArchivedShift(${r.id})">Print Daily Report</button></div>
+    </div>
+  </div>`;
+}
+
+// A week's worth of shift entries, collapsed inside one outer row — same
+// shift-entry component nested one level deeper, used only by the Archive.
+function srRenderWeekEntry(mondayIso, rows) {
+  let csVar = 0;
+  const attVals = [];
+  rows.forEach(r => {
+    csVar += r.cases_variance || 0;
+    if (r.cases_planned > 0) attVals.push(Math.round((r.cases_produced / r.cases_planned) * 100 * SR_PE));
+  });
+  const avgAtt = attVals.length ? Math.round(attVals.reduce((a, b) => a + b, 0) / attVals.length) : null;
+  const entriesHtml = rows.map(srRenderShiftEntry).join("");
+  return `<div class="sr-shift-entry">
+    <div class="sr-shift-entry-hdr" onclick="srToggleEntryEl(this)">
+      <div class="sr-se-meta"><span class="sr-se-date">Week of ${srFmtWeekRange(mondayIso)}</span><span class="sr-se-sup">${rows.length} shift${rows.length !== 1 ? "s" : ""}</span></div>
+      <div class="sr-se-kpis">
+        <span class="pill" style="background:${csVar >= 0 ? colorMix("var(--good)", 0.16) : "rgba(208,59,59,0.12)"};color:${csVar >= 0 ? "var(--good)" : "var(--critical)"}">Cs Var: ${csVar > 0 ? "+" : ""}${csVar.toLocaleString()}</span>
+        ${avgAtt !== null ? `<span class="pill" style="background:${avgAtt >= 90 ? colorMix("var(--good)", 0.16) : avgAtt >= 70 ? colorMix("var(--warning)", 0.2) : "rgba(208,59,59,0.12)"};color:${avgAtt >= 90 ? "var(--good)" : avgAtt >= 70 ? "#92610a" : "var(--critical)"}">${avgAtt}%</span>` : ""}
+      </div>
+      <span class="sr-se-toggle">▼</span>
+    </div>
+    <div class="sr-shift-entry-body">
+      <div class="sr-shift-log nested">${entriesHtml}</div>
+    </div>
+  </div>`;
+}
+
+// Toggles whichever shift/week entry the clicked header belongs to — no
+// ids to keep unique or collide across the three places this renders.
+function srToggleEntryEl(hdrEl) {
+  hdrEl.nextElementSibling?.classList.toggle("open");
+  hdrEl.querySelector(".sr-se-toggle")?.classList.toggle("open");
+}
+
+// Rebuilds a submitted row back into the same shape srGather()/
+// srBuildDailyReport() expect from the live form, so "Print Daily Report"
+// works identically for a row that was submitted five minutes ago or five
+// months ago. Any CONFIG.LINES line missing from the row's stored `lines`
+// (it only ever stores the lines that were marked running) comes back as
+// not-running, the same as the print builder already handles for a line
+// unchecked in the live form.
+function srRowToFormData(row) {
+  const byName = {};
+  (row.lines || []).forEach(l => { byName[l.line] = l; });
+  const lines = CONFIG.LINES.map(line => {
+    const l = byName[line.name];
+    if (!l) return { code: line.code, line: line.name, running: false, lbsPl: "", csPl: "", lbsAc: "", csAc: "", lbsVar: "", csVar: "", cm: "" };
+    return {
+      code: line.code, line: line.name, running: true,
+      lbsPl: String(l.lbs_planned ?? ""), csPl: String(l.cases_planned ?? ""),
+      lbsAc: String(l.lbs_produced ?? ""), csAc: String(l.cases_produced ?? ""),
+      lbsVar: String(l.lbs_variance ?? ""), csVar: String(l.cases_variance ?? ""),
+      cm: l.notes || "",
+    };
+  });
+  return {
+    sd: row.shift_date, sup: row.supervisor || "",
+    uc: row.unsafe_conditions ?? 0, nm: row.near_misses ?? 0, fa: row.first_aid ?? 0, sc: row.safety_comments || "",
+    sh: row.shortages || "", sto: row.stos || "",
+    ab: row.absences ?? 0, hn: row.headcount_needed ?? "", hp: row.headcount_present ?? "",
+    sapC: row.sap_completed ?? "", sapO: row.sap_open ?? "", sapR: row.sap_reason || "",
+    tr: row.training_notes || "", qa: row.quality_notes || "",
+    lines,
+  };
+}
+
+function srPrintArchivedShift(id) {
+  const row = srRowRegistry.get(id);
+  if (!row) return;
+  document.getElementById("sr-print-report").innerHTML = srBuildDailyReport(srRowToFormData(row));
+  window.print();
+}
+
+// ---- Weekly accumulator panel — everyone viewing the dashboard sees the
+// same Monday–Sunday total, reloaded every time the Shift Report tab is
+// opened (see setViewMode's "shift-report" branch) ----
 async function srLoadWeekPanel() {
   const body = document.getElementById("sr-week-body");
   const sub = document.getElementById("sr-week-sub");
@@ -3276,62 +3501,137 @@ async function srLoadWeekPanel() {
       return;
     }
 
+    rows.forEach(r => srRowRegistry.set(r.id, r));
+
     let lbsPl = 0, lbsAc = 0, lbsVar = 0, csPl = 0, csAc = 0, csVar = 0;
     rows.forEach(r => { lbsPl += r.lbs_planned || 0; lbsAc += r.lbs_produced || 0; lbsVar += r.lbs_variance || 0; csPl += r.cases_planned || 0; csAc += r.cases_produced || 0; csVar += r.cases_variance || 0; });
     const attVals = rows.filter(r => r.cases_planned > 0).map(r => Math.round((r.cases_produced / r.cases_planned) * 100 * SR_PE));
     const avgAtt = attVals.length ? Math.round(attVals.reduce((a, b) => a + b, 0) / attVals.length) : null;
 
-    let html = `<div class="sr-week-totals">
+    const totalsHtml = `<div class="sr-week-totals">
       <div class="mini-stat"><div class="mini-value">${lbsPl.toLocaleString()}</div><div class="mini-label">Lbs Planned</div></div>
       <div class="mini-stat"><div class="mini-value">${lbsAc.toLocaleString()}</div><div class="mini-label">Lbs Produced</div></div>
       <div class="mini-stat"><div class="mini-value" style="color:${lbsVar >= 0 ? "var(--good)" : "var(--critical)"}">${lbsVar > 0 ? "+" : ""}${lbsVar.toLocaleString()}</div><div class="mini-label">Lbs Variance</div></div>
       <div class="mini-stat"><div class="mini-value" style="color:${csVar >= 0 ? "var(--good)" : "var(--critical)"}">${csVar > 0 ? "+" : ""}${csVar.toLocaleString()}</div><div class="mini-label">Cases Variance</div></div>
       ${avgAtt !== null ? `<div class="mini-stat"><div class="mini-value" style="color:${avgAtt >= 90 ? "var(--good)" : avgAtt >= 70 ? "var(--warning)" : "var(--critical)"}">${avgAtt}%</div><div class="mini-label">Avg Attainment</div></div>` : ""}
-    </div><div class="sr-shift-log">`;
+    </div>`;
 
-    rows.forEach((r, idx) => {
-      const att = r.cases_planned > 0 ? Math.round((r.cases_produced / r.cases_planned) * 100 * SR_PE) : null;
-      html += `<div class="sr-shift-entry">
-        <div class="sr-shift-entry-hdr" onclick="srToggleEntry(${idx})">
-          <div class="sr-se-meta"><span class="sr-se-date">${srFullDate(r.shift_date)}</span><span class="sr-se-sup">${escapeHtml(r.supervisor || "—")}</span></div>
-          <div class="sr-se-kpis">
-            <span class="pill" style="background:var(--surface-2)">Cs: ${(r.cases_produced || 0).toLocaleString()} / ${(r.cases_planned || 0).toLocaleString()}</span>
-            <span class="pill" style="background:${(r.cases_variance || 0) >= 0 ? colorMix("var(--good)", 0.16) : "rgba(208,59,59,0.12)"};color:${(r.cases_variance || 0) >= 0 ? "var(--good)" : "var(--critical)"}">Cs Var: ${(r.cases_variance || 0) > 0 ? "+" : ""}${(r.cases_variance || 0).toLocaleString()}</span>
-            ${att !== null ? `<span class="pill" style="background:${att >= 90 ? colorMix("var(--good)", 0.16) : att >= 70 ? colorMix("var(--warning)", 0.2) : "rgba(208,59,59,0.12)"};color:${att >= 90 ? "var(--good)" : att >= 70 ? "#92610a" : "var(--critical)"}">${att}%</span>` : ""}
-          </div>
-          <span class="sr-se-toggle" id="sr-se-tog-${idx}">▼</span>
-        </div>
-        <div class="sr-shift-entry-body" id="sr-se-body-${idx}">
-          <table class="dispatch-table"><thead><tr>
-            <th>Line</th><th class="c">Lbs Pl</th><th class="c">Lbs Ac</th><th class="c">Lbs Var</th>
-            <th class="c">Cs Pl</th><th class="c">Cs Ac</th><th class="c">Cs Var</th><th>Notes</th>
-          </tr></thead><tbody>`;
-      (r.lines || []).forEach(l => {
-        const lv = l.lbs_variance || 0, cv = l.cases_variance || 0;
-        html += `<tr>
-          <td style="font-weight:800;color:var(--accent)">${escapeHtml(l.line)}</td>
-          <td class="c">${(l.lbs_planned || 0).toLocaleString()}</td><td class="c">${(l.lbs_produced || 0).toLocaleString()}</td>
-          <td class="c" style="color:${lv >= 0 ? "var(--good)" : "var(--critical)"};font-weight:700">${lv > 0 ? "+" : ""}${lv.toLocaleString()}</td>
-          <td class="c">${(l.cases_planned || 0).toLocaleString()}</td><td class="c">${(l.cases_produced || 0).toLocaleString()}</td>
-          <td class="c" style="color:${cv >= 0 ? "var(--good)" : "var(--critical)"};font-weight:700">${cv > 0 ? "+" : ""}${cv.toLocaleString()}</td>
-          <td style="font-size:0.8rem;color:var(--text-muted)">${escapeHtml(l.notes || "")}</td>
-        </tr>`;
-      });
-      html += `</tbody></table></div></div>`;
-    });
-
-    html += `</div>`;
-    body.innerHTML = html;
+    body.innerHTML = totalsHtml + `<div class="sr-shift-log">${rows.map(srRenderShiftEntry).join("")}</div>`;
   } catch (err) {
     console.error(err);
     body.innerHTML = `<div class="empty-state">Could not load weekly data: ${escapeHtml(err.message || String(err))}</div>`;
   }
 }
 
-function srToggleEntry(idx) {
-  document.getElementById("sr-se-body-" + idx)?.classList.toggle("open");
-  document.getElementById("sr-se-tog-" + idx)?.classList.toggle("open");
+// ---- Archive — every shift ever submitted, grouped by week (see the
+// "Grouped by week, expandable" scope this was built to) ----
+async function srLoadArchive() {
+  const body = document.getElementById("archive-body");
+  if (!sb) {
+    body.innerHTML = `<div class="empty-state">Shift reports aren't connected to Supabase yet — set CONFIG.SUPABASE_ANON_KEY (see the comment above CONFIG).</div>`;
+    return;
+  }
+  try {
+    const { data: rows, error } = await sb.from("eos_production_shifts")
+      .select("*")
+      .order("shift_date", { ascending: false })
+      .order("created_at", { ascending: false });
+    if (error) throw error;
+
+    if (!rows.length) {
+      body.innerHTML = `<div class="empty-state">No shift reports submitted yet.</div>`;
+      return;
+    }
+
+    rows.forEach(r => srRowRegistry.set(r.id, r));
+
+    const weeks = new Map(); // Monday ISO -> rows[]
+    rows.forEach(r => {
+      const mon = srGetMonday(r.shift_date + "T12:00:00");
+      if (!weeks.has(mon)) weeks.set(mon, []);
+      weeks.get(mon).push(r);
+    });
+    const sortedMondays = Array.from(weeks.keys()).sort((a, b) => b.localeCompare(a));
+    body.innerHTML = `<div class="sr-shift-log">${sortedMondays.map(mon => srRenderWeekEntry(mon, weeks.get(mon))).join("")}</div>`;
+  } catch (err) {
+    console.error(err);
+    body.innerHTML = `<div class="empty-state">Could not load the archive: ${escapeHtml(err.message || String(err))}</div>`;
+  }
 }
+
+// ---- Overview tab's "Shift Reports" tile — combined totals for whichever
+// date the Overview date picker is showing, tap to see every shift
+// submitted that date in a modal ----
+let overviewShiftRows = [];
+
+async function refreshOverviewShiftCard(date) {
+  const card = document.getElementById("overview-shift-card");
+  const body = document.getElementById("overview-shift-body");
+  document.getElementById("overview-shift-date-label").textContent = date === todayStr() ? "Today" : formatDateLabel(date);
+  card.hidden = false;
+
+  if (!sb) {
+    body.innerHTML = `<div class="empty-state">Shift reports aren't connected to Supabase yet.</div>`;
+    overviewShiftRows = [];
+    return;
+  }
+  try {
+    const { data: rows, error } = await sb.from("eos_production_shifts").select("*").eq("shift_date", date).order("created_at", { ascending: false });
+    if (error) throw error;
+    overviewShiftRows = rows || [];
+    overviewShiftRows.forEach(r => srRowRegistry.set(r.id, r));
+
+    if (!overviewShiftRows.length) {
+      body.innerHTML = `<div class="empty-state">No shift reports submitted for this date.</div>`;
+      return;
+    }
+
+    let csVar = 0, safety = 0;
+    const attVals = [];
+    overviewShiftRows.forEach(r => {
+      csVar += r.cases_variance || 0;
+      safety += (r.unsafe_conditions || 0) + (r.near_misses || 0) + (r.first_aid || 0);
+      if (r.cases_planned > 0) attVals.push(Math.round((r.cases_produced / r.cases_planned) * 100 * SR_PE));
+    });
+    const avgAtt = attVals.length ? Math.round(attVals.reduce((a, b) => a + b, 0) / attVals.length) : null;
+    const n = overviewShiftRows.length;
+
+    body.innerHTML = `<div class="overview-shift-metrics">
+      <div class="mini-stat"><div class="mini-value">${n}</div><div class="mini-label">${n === 1 ? "Shift" : "Shifts"} Submitted</div></div>
+      <div class="mini-stat"><div class="mini-value" style="color:${csVar >= 0 ? "var(--good)" : "var(--critical)"}">${csVar > 0 ? "+" : ""}${csVar.toLocaleString()}</div><div class="mini-label">Cases Variance</div></div>
+      <div class="mini-stat"><div class="mini-value" style="color:${avgAtt === null ? "var(--text)" : avgAtt >= 90 ? "var(--good)" : avgAtt >= 70 ? "var(--warning)" : "var(--critical)"}">${avgAtt !== null ? avgAtt + "%" : "—"}</div><div class="mini-label">Avg Attainment</div></div>
+      <div class="mini-stat"><div class="mini-value" style="color:${safety > 0 ? "var(--warning)" : "var(--good)"}">${safety}</div><div class="mini-label">Safety Events</div></div>
+    </div><div class="schedule-mini-note">Tap to view ${n === 1 ? "this shift's" : "these shifts'"} full detail</div>`;
+  } catch (err) {
+    console.error(err);
+    body.innerHTML = `<div class="empty-state">Could not load shift reports: ${escapeHtml(err.message || String(err))}</div>`;
+    overviewShiftRows = [];
+  }
+}
+
+const overviewShiftCard = document.getElementById("overview-shift-card");
+const overviewShiftModal = document.getElementById("overview-shift-modal");
+const overviewShiftModalCloseBtn = document.getElementById("overview-shift-modal-close-btn");
+
+function openOverviewShiftModal() {
+  document.getElementById("overview-shift-modal-date").textContent = document.getElementById("overview-shift-date-label").textContent;
+  const modalBody = document.getElementById("overview-shift-modal-body");
+  modalBody.innerHTML = overviewShiftRows.length
+    ? overviewShiftRows.map(srRenderShiftEntry).join("")
+    : `<div class="empty-state">No shift reports submitted for this date.</div>`;
+  overviewShiftModal.hidden = false;
+}
+function closeOverviewShiftModal() {
+  overviewShiftModal.hidden = true;
+}
+overviewShiftCard.addEventListener("click", openOverviewShiftModal);
+overviewShiftModalCloseBtn.addEventListener("click", closeOverviewShiftModal);
+overviewShiftModal.addEventListener("click", (e) => {
+  if (e.target === overviewShiftModal) closeOverviewShiftModal();
+});
+document.addEventListener("keydown", (e) => {
+  if (e.key === "Escape" && !overviewShiftModal.hidden) closeOverviewShiftModal();
+});
 
 // ---- Weekly pace strip — reads eos_weekly_targets for the current week;
 // stays hidden if no target row exists yet (see shift_reports.sql for how
