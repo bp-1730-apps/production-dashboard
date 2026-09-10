@@ -1,0 +1,2148 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<!-- maximum-scale + user-scalable=no keeps a touchscreen kiosk from accidentally
+     pinch-zooming when someone taps with a gloved hand -->
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>1730 Production Dashboard</title>
+<!-- Inter: a "control room" grade UI face — sharper number spacing than the
+     system-ui stack at small sizes, without the licensing/self-hosting
+     hassle. font-display:swap means the page paints with the system-ui
+     fallback the instant it loads and swaps in Inter when it's ready, so a
+     slow/offline Pi never blocks on a web font before showing numbers. -->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+  /* ============================================================
+     DESIGN TOKENS
+     A light, "advanced SaaS console" theme — cool neutrals, one
+     confident accent blue, soft elevation instead of hard borders.
+     Swap these hex values for your exact Novus brand tokens if you
+     want a pixel-perfect match — everything below is written
+     against these variables, so retinting the whole dashboard is a
+     one-place edit. Status colors (good/warning/critical) are left
+     as-is on purpose — they're a fixed, validated palette, not a
+     "theme" color, so they never change with light/dark.
+     ============================================================ */
+  :root {
+    --page:          #eef1f6;
+    --surface:       #ffffff;
+    --surface-2:     #eef0f4;
+    --border:        rgba(15,23,42,0.08);
+    --border-strong: rgba(15,23,42,0.14);
+    --text:          #10131a;
+    --text-2:        #4b5468;
+    --text-muted:    #868ea3;
+
+    --good:        #0ca30c;
+    --warning:     #fab219;
+    --critical:    #d03b3b;
+    --accent:      #2a78d6;
+    --accent-ink:  #ffffff;
+
+    --shadow-sm: 0 1px 2px rgba(16,19,26,0.04), 0 1px 3px rgba(16,19,26,0.06);
+    --shadow-md: 0 6px 16px rgba(16,19,26,0.07), 0 2px 5px rgba(16,19,26,0.05);
+    --shadow-lg: 0 16px 36px rgba(16,19,26,0.11), 0 4px 10px rgba(16,19,26,0.06);
+
+    --radius-lg: 18px;
+    --radius-md: 12px;
+    --radius-sm: 8px;
+  }
+
+  * { box-sizing: border-box; }
+
+  html, body {
+    height: 100%;
+    margin: 0;
+    background: linear-gradient(180deg, #f6f7fa 0%, var(--page) 100%);
+    color: var(--text);
+    font-family: "Inter", system-ui, -apple-system, "Segoe UI", sans-serif;
+    /* Kiosk screens are usually viewed from a few feet away with gloves on —
+       everything on this page starts bigger than a normal desktop app. */
+    font-size: 18px;
+    -webkit-tap-highlight-color: transparent;
+    user-select: none;
+    overflow: hidden; /* this page is a fixed kiosk view, not a scrolling page */
+  }
+
+  #app {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+  }
+
+  /* ---------------- Header ---------------- */
+  header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 16px 28px;
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+    box-shadow: var(--shadow-sm);
+    position: relative;
+    z-index: 1;
+    flex: 0 0 auto;
+  }
+  header .brand {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+  }
+  header .brand img {
+    height: 38px;
+    display: block;
+  }
+  header h1 {
+    font-size: 1.3rem;
+    font-weight: 800;
+    letter-spacing: -0.015em;
+    margin: 0;
+    color: var(--text);
+  }
+  header .clock {
+    font-size: 1.1rem;
+    color: var(--text-2);
+    font-variant-numeric: tabular-nums;
+    font-weight: 600;
+  }
+
+  /* ---------------- Nav: Overview + line selector tabs ---------------- */
+  nav#line-tabs {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 14px 28px;
+    background: var(--page);
+    flex: 0 0 auto;
+    overflow-x: auto;
+  }
+  nav#line-tabs button {
+    /* Touch target: comfortably above the ~44px minimum, since this is used
+       on a shop floor, possibly with gloves. */
+    min-height: 60px;
+    min-width: 110px;
+    padding: 10px 22px;
+    border-radius: var(--radius-md);
+    border: 1px solid var(--border);
+    background: var(--surface);
+    color: var(--text-2);
+    font-size: 1.05rem;
+    font-weight: 600;
+    font-family: inherit;
+    box-shadow: var(--shadow-sm);
+    cursor: pointer;
+    transition: box-shadow 0.15s ease, transform 0.1s ease, border-color 0.15s ease;
+  }
+  nav#line-tabs button.tab-overview { font-weight: 800; }
+  nav#line-tabs .tab-divider {
+    width: 1px;
+    align-self: stretch;
+    margin: 6px 2px;
+    background: var(--border-strong);
+    flex: 0 0 auto;
+  }
+  nav#line-tabs button[aria-selected="true"] {
+    background: var(--accent);
+    border-color: var(--accent);
+    color: var(--accent-ink);
+    box-shadow: var(--shadow-md);
+  }
+  nav#line-tabs button:active {
+    transform: scale(0.98);
+  }
+  @media (hover: hover) {
+    nav#line-tabs button:hover:not([aria-selected="true"]) {
+      border-color: var(--border-strong);
+      box-shadow: var(--shadow-md);
+    }
+  }
+
+  /* ---------------- Mode toggle (Live / Date Range) ---------------- */
+  #mode-row {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    padding: 0 28px 14px;
+    flex: 0 0 auto;
+    flex-wrap: wrap;
+  }
+  #mode-row[hidden] { display: none; }
+  .segmented {
+    display: inline-flex;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+    overflow: hidden;
+    background: var(--surface);
+    box-shadow: var(--shadow-sm);
+    flex: 0 0 auto;
+  }
+  .segmented button {
+    min-height: 52px;
+    padding: 8px 20px;
+    border: none;
+    background: transparent;
+    color: var(--text-2);
+    font-size: 1rem;
+    font-weight: 600;
+    font-family: inherit;
+    cursor: pointer;
+  }
+  .segmented button + button { border-left: 1px solid var(--border); }
+  .segmented button[aria-pressed="true"] {
+    background: var(--accent);
+    color: var(--accent-ink);
+  }
+
+  #range-bar {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+  }
+  #range-bar[hidden] { display: none; }
+  #range-bar input[type="date"] {
+    min-height: 52px;
+    padding: 8px 14px;
+    border-radius: var(--radius-md);
+    border: 1px solid var(--border);
+    background: var(--surface);
+    color: var(--text);
+    font-size: 1rem;
+    font-family: inherit;
+    box-shadow: var(--shadow-sm);
+  }
+  #range-bar .to-label {
+    color: var(--text-muted);
+    font-size: 0.95rem;
+  }
+  .btn {
+    min-height: 52px;
+    padding: 8px 22px;
+    border-radius: var(--radius-md);
+    border: 1px solid var(--accent);
+    background: var(--accent);
+    color: var(--accent-ink);
+    font-size: 1rem;
+    font-weight: 600;
+    font-family: inherit;
+    box-shadow: var(--shadow-sm);
+    cursor: pointer;
+    transition: filter 0.15s ease;
+  }
+  .btn.secondary {
+    background: var(--surface);
+    color: var(--text-2);
+    border-color: var(--border);
+  }
+  .btn[hidden] { display: none; }
+  @media (hover: hover) {
+    .btn:hover { filter: brightness(1.05); }
+  }
+
+  .period-note {
+    font-size: 0.85rem;
+    color: var(--text-muted);
+    margin-top: 6px;
+  }
+  .period-note[hidden] { display: none; }
+
+  /* ---------------- Error / stale banner ---------------- */
+  #error-banner {
+    flex: 0 0 auto;
+    margin: 0 28px;
+    padding: 12px 18px;
+    border-radius: var(--radius-md);
+    background: rgba(208,59,59,0.08);
+    border: 1px solid rgba(208,59,59,0.35);
+    color: var(--critical);
+    font-weight: 600;
+    font-size: 1rem;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  #error-banner[hidden] { display: none; }
+
+  /* ---------------- Main content ---------------- */
+  main {
+    flex: 1 1 auto;
+    padding: 22px 28px 26px;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+  }
+  #overview-view, #line-view {
+    flex: 1 1 auto;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+  }
+  #overview-view[hidden], #line-view[hidden] { display: none; }
+
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-md);
+    padding: 22px 24px;
+    /* Grid/flex items default to a content-based min-width, which lets a
+       wide child (the dispatch table's non-wrapping cells) force the whole
+       row — and the page — wider than the viewport instead of scrolling
+       internally the way its own overflow-y:auto intends. This is the fix. */
+    min-width: 0;
+    min-height: 0;
+  }
+  .card h2 {
+    margin: 0 0 16px;
+    font-size: 0.85rem;
+    font-weight: 700;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+  }
+  .card.clickable {
+    cursor: pointer;
+    transition: box-shadow 0.15s ease, transform 0.15s ease, border-color 0.15s ease;
+  }
+  .card.clickable:active { transform: scale(0.99); }
+  @media (hover: hover) {
+    .card.clickable:hover {
+      box-shadow: var(--shadow-lg);
+      transform: translateY(-2px);
+      border-color: var(--border-strong);
+    }
+  }
+
+  /* ---------------- Overview tab ---------------- */
+  .overview-summary {
+    flex: 0 0 auto;
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 16px;
+  }
+  .mini-stat {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+    box-shadow: var(--shadow-sm);
+    padding: 16px 18px;
+  }
+  .mini-stat .mini-value {
+    font-size: 1.9rem;
+    font-weight: 800;
+    letter-spacing: -0.02em;
+    color: var(--text);
+    font-variant-numeric: tabular-nums;
+    line-height: 1;
+  }
+  .mini-stat .mini-label {
+    font-size: 0.78rem;
+    color: var(--text-muted);
+    margin-top: 8px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+  }
+
+  .overview-grid {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow-y: auto;
+    display: grid;
+    /* A fixed 3-column grid (rather than auto-fill-as-many-as-fit) keeps
+       cards a substantial, readable size on a wide kiosk display instead
+       of stretching to 6-across-one-row with a lot of dead space below —
+       a plant with 6-9 lines reads as 2-3 well-proportioned rows. */
+    grid-template-columns: repeat(3, 1fr);
+    gap: 18px;
+    align-content: start;
+    padding-bottom: 4px;
+  }
+  @media (max-width: 1300px) {
+    .overview-grid { grid-template-columns: repeat(2, 1fr); }
+  }
+  @media (max-width: 700px) {
+    .overview-grid { grid-template-columns: 1fr; }
+  }
+  .line-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-left: 5px solid var(--text-muted);
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-md);
+    padding: 20px 22px;
+    min-width: 0;
+  }
+  .line-card.status-good     { border-left-color: var(--good); }
+  .line-card.status-warning  { border-left-color: var(--warning); }
+  .line-card.status-critical { border-left-color: var(--critical); }
+  .line-card.status-offline  { border-left-color: var(--border-strong); }
+  .line-card-head {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    margin-bottom: 12px;
+    gap: 10px;
+  }
+  .line-card-name {
+    font-size: 1.15rem;
+    font-weight: 800;
+    color: var(--text);
+    letter-spacing: -0.01em;
+  }
+  .line-card-code {
+    font-size: 0.78rem;
+    color: var(--text-muted);
+    font-weight: 600;
+    margin-top: 2px;
+  }
+  .line-card-oee {
+    font-size: 2.1rem;
+    font-weight: 800;
+    letter-spacing: -0.02em;
+    font-variant-numeric: tabular-nums;
+    color: var(--text);
+    line-height: 1;
+    flex: 0 0 auto;
+  }
+  .line-card-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 0.88rem;
+    color: var(--text-2);
+    margin-top: 9px;
+    gap: 10px;
+  }
+  .line-card-row strong { color: var(--text); font-variant-numeric: tabular-nums; font-weight: 700; }
+  .line-card .meter-track { height: 10px; border-radius: 6px; margin-top: 6px; }
+  .line-card-error {
+    font-size: 0.85rem;
+    color: var(--critical);
+    margin-top: 10px;
+    font-weight: 600;
+    line-height: 1.4;
+  }
+
+  /* ---------------- Line detail: stat strip + two-panel row ---------------- */
+  .stat-strip {
+    flex: 0 0 auto;
+    display: grid;
+    grid-template-columns: 0.85fr 0.65fr 1.15fr;
+    gap: 20px;
+  }
+  .detail-row {
+    flex: 1 1 auto;
+    min-height: 0;
+    display: grid;
+    grid-template-columns: 1.3fr 1fr;
+    gap: 20px;
+  }
+  @media (max-width: 1100px) {
+    /* Not enough width for the side-by-side layouts — stack, and let the
+       page scroll rather than crush a card unreadably thin. A real kiosk
+       screen is wide, so this mainly protects a portrait tablet or a
+       narrow preview window, not the shop-floor display itself. */
+    .stat-strip { grid-template-columns: 1fr; }
+    .detail-row { grid-template-columns: 1fr; overflow-y: auto; }
+    .overview-summary { grid-template-columns: repeat(2, 1fr); }
+    html, body { overflow: auto; }
+  }
+  @media (max-width: 640px) {
+    .overview-summary { grid-template-columns: 1fr 1fr; }
+    .prod-grid { grid-template-columns: 1fr; }
+  }
+
+  /* OEE meter: "a single ratio against a limit" reads best as a meter, not
+     a gauge or a pie — the fill length IS the number. */
+  .meter-value {
+    font-size: 3rem;
+    font-weight: 800;
+    letter-spacing: -0.02em;
+    line-height: 1;
+    margin-bottom: 4px;
+    color: var(--text);
+  }
+  .meter-status {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 1rem;
+    font-weight: 600;
+    /* Text stays neutral ink — the dot is the only thing that carries the
+       status color, since warning yellow reads too light as body text on
+       a white surface. */
+    color: var(--text-2);
+    margin-bottom: 14px;
+  }
+  .meter-status .dot {
+    width: 11px;
+    height: 11px;
+    border-radius: 50%;
+    flex: 0 0 auto;
+  }
+  .meter-track {
+    position: relative;
+    height: 22px;
+    border-radius: 11px;
+    background: var(--surface-2);
+    box-shadow: inset 0 1px 2px rgba(16,19,26,0.06);
+    overflow: hidden;
+  }
+  .meter-fill {
+    position: absolute;
+    inset: 0;
+    width: 0%;
+    border-radius: 11px;
+    transition: width 0.6s ease, background 0.3s ease;
+  }
+  .meter-scale {
+    display: flex;
+    justify-content: space-between;
+    margin-top: 6px;
+    font-size: 0.85rem;
+    color: var(--text-muted);
+    font-variant-numeric: tabular-nums;
+  }
+
+  .stat-value {
+    font-size: 2.3rem;
+    font-weight: 800;
+    letter-spacing: -0.02em;
+    line-height: 1;
+    color: var(--text);
+  }
+  .stat-label {
+    font-size: 0.95rem;
+    color: var(--text-muted);
+    margin-top: 6px;
+  }
+
+  /* ---------------- Production: Target vs Actual ---------------- */
+  #production-card { display: flex; flex-direction: column; }
+  .prod-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 14px;
+    margin-bottom: 14px;
+  }
+  .prod-metric {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+  .prod-metric-label {
+    font-size: 0.76rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--text-muted);
+  }
+  .prod-target {
+    font-size: 1.25rem;
+    font-weight: 800;
+    color: var(--text);
+    font-variant-numeric: tabular-nums;
+    min-height: 1.3em;
+  }
+  .prod-target .unit { font-size: 0.8rem; font-weight: 600; color: var(--text-muted); margin-left: 4px; }
+  .prod-no-target {
+    color: var(--text-muted);
+    font-size: 0.85rem;
+    font-weight: 500;
+  }
+  .prod-input {
+    min-height: 56px;
+    padding: 8px 14px;
+    border-radius: var(--radius-md);
+    border: 2px solid var(--border);
+    background: var(--page);
+    color: var(--text);
+    font-size: 1.3rem;
+    font-weight: 700;
+    font-family: inherit;
+    font-variant-numeric: tabular-nums;
+    width: 100%;
+    transition: border-color 0.15s ease, background 0.15s ease;
+  }
+  .prod-input:focus {
+    outline: none;
+    border-color: var(--accent);
+    background: var(--surface);
+  }
+  /* Native number-input spinner arrows are too small to tap reliably on a
+     touchscreen and render inconsistently between focused/unfocused
+     fields — the on-screen keyboard is how this actually gets typed into,
+     so the spinners just add visual noise. Hidden on both engines. */
+  .prod-input::-webkit-outer-spin-button,
+  .prod-input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+  .prod-input { -moz-appearance: textfield; }
+  .prod-attainment {
+    font-size: 0.86rem;
+    color: var(--text-2);
+    font-weight: 600;
+    margin-top: 10px;
+  }
+
+  /* ---------------- Dispatches (individual event log) ---------------- */
+  #breakdown-card {
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+  }
+  #breakdown-body {
+    flex: 1 1 auto;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+  }
+  .dispatch-summary {
+    font-size: 0.9rem;
+    color: var(--text-muted);
+    margin-bottom: 12px;
+    flex: 0 0 auto;
+  }
+  .dispatch-table-wrap {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow-y: auto;
+    overflow-x: auto; /* a narrow column + non-wrapping cells scroll sideways in here, not the whole page */
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+  }
+  table.dispatch-table {
+    width: 100%;
+    border-collapse: collapse;
+  }
+  .dispatch-table th {
+    position: sticky;
+    top: 0;
+    background: var(--surface);
+    text-align: left;
+    font-size: 0.75rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--text-muted);
+    padding: 10px 12px;
+    border-bottom: 1px solid var(--border);
+  }
+  .dispatch-table td {
+    padding: 10px 12px;
+    font-size: 0.92rem;
+    color: var(--text-2);
+    border-bottom: 1px solid var(--border);
+    vertical-align: middle;
+    white-space: nowrap;
+  }
+  .dispatch-table tbody tr:last-child td { border-bottom: none; }
+  .dispatch-table td.reason-cell {
+    white-space: normal;
+    max-width: 260px;
+    color: var(--text);
+    font-weight: 500;
+  }
+  .dispatch-table td.num-cell {
+    font-weight: 700;
+    color: var(--text);
+    font-variant-numeric: tabular-nums;
+    text-align: right;
+  }
+
+  .pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 10px;
+    border-radius: 999px;
+    font-size: 0.8rem;
+    font-weight: 700;
+    color: var(--text);
+    white-space: nowrap;
+  }
+  .pill .dot {
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    flex: 0 0 auto;
+  }
+
+  .empty-state {
+    color: var(--text-muted);
+    font-size: 1rem;
+    padding: 20px 0;
+    text-align: center;
+  }
+
+  /* ---------------- Today's Schedule (weekly planner upload) ---------------- */
+  #schedule-card {
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+  }
+  .schedule-head {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    margin-bottom: 12px;
+    flex: 0 0 auto;
+  }
+  .schedule-upload-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+  }
+  .schedule-upload-row .btn {
+    min-height: 44px;
+    padding: 8px 16px;
+    font-size: 0.9rem;
+  }
+  .schedule-file-name {
+    font-size: 0.8rem;
+    color: var(--text-muted);
+  }
+  .schedule-note {
+    font-size: 0.76rem;
+    color: var(--text-muted);
+    margin-top: 2px;
+  }
+  .schedule-note.is-error {
+    color: var(--critical);
+    font-weight: 600;
+  }
+  .schedule-day-strip {
+    display: flex;
+    gap: 8px;
+    overflow-x: auto;
+    padding-bottom: 4px;
+    flex: 0 0 auto;
+    margin-bottom: 10px;
+  }
+  .schedule-day-chip {
+    min-height: 50px;
+    padding: 6px 14px;
+    border-radius: var(--radius-md);
+    border: 1px solid var(--border);
+    background: var(--surface);
+    color: var(--text-2);
+    font-size: 0.82rem;
+    font-weight: 600;
+    font-family: inherit;
+    line-height: 1.25;
+    cursor: pointer;
+    text-align: center;
+    white-space: nowrap;
+    flex: 0 0 auto;
+  }
+  .schedule-day-chip .dow {
+    display: block;
+    font-size: 0.68rem;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--text-muted);
+  }
+  .schedule-day-chip[aria-selected="true"] {
+    background: var(--accent);
+    border-color: var(--accent);
+    color: var(--accent-ink);
+  }
+  .schedule-day-chip[aria-selected="true"] .dow { color: rgba(255,255,255,0.8); }
+
+  .schedule-progress {
+    font-size: 0.84rem;
+    color: var(--text-muted);
+    margin-bottom: 10px;
+    flex: 0 0 auto;
+    font-weight: 600;
+  }
+  .schedule-list {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+  .schedule-item {
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+    padding: 10px 12px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+    background: var(--page);
+    cursor: pointer;
+  }
+  .schedule-item.is-complete {
+    background: color-mix(in srgb, var(--good) 8%, var(--surface));
+    border-color: color-mix(in srgb, var(--good) 30%, var(--border));
+  }
+  .schedule-item input[type="checkbox"] {
+    width: 26px;
+    height: 26px;
+    margin: 2px 0 0;
+    accent-color: var(--good);
+    flex: 0 0 auto;
+    cursor: pointer;
+  }
+  .schedule-item-body { min-width: 0; flex: 1 1 auto; }
+  .schedule-item-product {
+    font-size: 0.9rem;
+    font-weight: 700;
+    color: var(--text);
+    line-height: 1.3;
+  }
+  .schedule-item.is-complete .schedule-item-product {
+    color: var(--text-2);
+    text-decoration: line-through;
+    text-decoration-color: var(--text-muted);
+  }
+  .schedule-item-meta {
+    font-size: 0.76rem;
+    color: var(--text-muted);
+    margin-top: 3px;
+  }
+  .schedule-item.task-item {
+    background: color-mix(in srgb, var(--warning) 8%, var(--surface));
+    border-color: color-mix(in srgb, var(--warning) 30%, var(--border));
+  }
+  .schedule-item.task-item .schedule-item-product {
+    font-style: italic;
+    color: var(--text-2);
+  }
+
+  /* ---------------- Footer / freshness ---------------- */
+  footer {
+    flex: 0 0 auto;
+    padding: 10px 28px 16px;
+    color: var(--text-muted);
+    font-size: 0.9rem;
+    font-weight: 500;
+    display: flex;
+    justify-content: space-between;
+  }
+
+  .skeleton {
+    color: var(--text-muted);
+  }
+</style>
+</head>
+<body>
+<div id="app">
+
+  <header>
+    <div class="brand">
+      <!-- Point this at your real logo path once this lives in the Ops Hub repo -->
+      <img src="novus-foods.png" alt="Novus Foods" onerror="this.style.display='none'">
+      <h1>1730 Production Dashboard</h1>
+    </div>
+    <div class="clock" id="clock"></div>
+  </header>
+
+  <nav id="line-tabs" role="tablist" aria-label="View"></nav>
+
+  <div id="mode-row" hidden>
+    <div class="segmented" role="group" aria-label="View mode">
+      <button type="button" id="mode-live-btn" aria-pressed="true">Live</button>
+      <button type="button" id="mode-range-btn" aria-pressed="false">Date Range</button>
+    </div>
+    <div id="range-bar" hidden>
+      <input type="date" id="range-start-input" aria-label="Start date">
+      <span class="to-label">to</span>
+      <input type="date" id="range-end-input" aria-label="End date">
+      <button type="button" class="btn" id="range-view-btn">View</button>
+      <button type="button" class="btn secondary" id="range-refresh-btn" hidden>Refresh</button>
+    </div>
+  </div>
+
+  <div id="error-banner" hidden></div>
+
+  <main>
+    <!-- ---------------- Overview: plant-wide landing view ---------------- -->
+    <section id="overview-view">
+      <div class="overview-summary" id="overview-summary"></div>
+      <div class="overview-grid" id="overview-grid">
+        <div class="empty-state">Loading plant overview…</div>
+      </div>
+    </section>
+
+    <!-- ---------------- Line detail: one line's full picture ---------------- -->
+    <section id="line-view" hidden>
+      <div class="stat-strip">
+        <section class="card">
+          <h2>OEE — <span id="line-name-1">—</span><span id="oee-period-suffix"></span></h2>
+          <div class="meter-value skeleton" id="oee-value">Loading…</div>
+          <div class="meter-status">
+            <span class="dot" id="oee-dot"></span>
+            <span id="oee-status-label"></span>
+          </div>
+          <div class="meter-track">
+            <div class="meter-fill" id="oee-fill"></div>
+          </div>
+          <div class="meter-scale"><span>0%</span><span>50%</span><span>100%</span></div>
+          <div class="period-note" id="oee-period-note" hidden></div>
+        </section>
+
+        <section class="card">
+          <h2 id="dt-card-title">Total Downtime — Today</h2>
+          <div class="stat-value skeleton" id="total-dt-value">Loading…</div>
+          <div class="stat-label">minutes, all reasons</div>
+        </section>
+
+        <section class="card" id="production-card">
+          <h2>Production — Today</h2>
+          <div class="prod-grid">
+            <div class="prod-metric">
+              <div class="prod-metric-label">Cases</div>
+              <div class="prod-target" id="prod-cases-target">—</div>
+              <input type="number" inputmode="decimal" min="0" step="1" class="prod-input"
+                     id="prod-cases-actual" placeholder="Actual cases" aria-label="Actual cases produced today">
+            </div>
+            <div class="prod-metric">
+              <div class="prod-metric-label">Pounds</div>
+              <div class="prod-target" id="prod-lbs-target">—</div>
+              <input type="number" inputmode="decimal" min="0" step="1" class="prod-input"
+                     id="prod-lbs-actual" placeholder="Actual lbs" aria-label="Actual pounds produced today">
+            </div>
+          </div>
+          <div class="meter-track"><div class="meter-fill" id="prod-fill"></div></div>
+          <div class="prod-attainment" id="prod-attainment-label"></div>
+          <div class="schedule-note" id="prod-save-note" hidden></div>
+        </section>
+      </div>
+
+      <div class="detail-row">
+        <section class="card" id="breakdown-card">
+          <h2 id="breakdown-card-title">Dispatches — Today</h2>
+          <div id="breakdown-body">
+            <div class="empty-state">Loading…</div>
+          </div>
+        </section>
+
+        <section class="card" id="schedule-card">
+          <h2>Today's Schedule</h2>
+          <div class="schedule-head">
+            <div class="schedule-upload-row">
+              <button type="button" class="btn secondary" id="schedule-upload-btn">Upload Schedule</button>
+              <button type="button" class="btn secondary" id="schedule-clear-btn" hidden>Clear</button>
+              <input type="file" id="schedule-file-input" accept=".xlsb,.xlsx,.xls" hidden>
+            </div>
+            <span class="schedule-file-name" id="schedule-file-name"></span>
+            <span class="schedule-note">Shared with every screen viewing this dashboard — not written back to L2L.</span>
+            <span class="schedule-note" id="schedule-error" hidden></span>
+          </div>
+          <div class="schedule-day-strip" id="schedule-day-strip"></div>
+          <div class="schedule-progress" id="schedule-progress"></div>
+          <div class="schedule-list" id="schedule-list">
+            <div class="empty-state">Upload this week's planner schedule (.xlsb) to see products for this line.</div>
+          </div>
+        </section>
+      </div>
+    </section>
+  </main>
+
+  <footer>
+    <span id="status-line">Connecting…</span>
+    <span id="line-code-label"></span>
+  </footer>
+
+</div>
+
+<!-- SheetJS: reads the planner's .xlsb schedule file entirely in the
+     browser (same library family — "xlsx" — your Ops Hub already uses for
+     SheetJS-based exports). Pinned to a specific version on SheetJS's own
+     CDN so this never silently changes under you. -->
+<script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
+<!-- Supabase client library: lets the browser read/write the shared
+     schedule_state and production_actuals tables directly (same Supabase
+     project as the l2l-proxy function), so every screen that opens this
+     dashboard sees the same uploaded schedule, the same checked-off items,
+     and the same actual production numbers. Pinned to a specific version
+     for the same reason as SheetJS above. -->
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.112.0"></script>
+<script>
+/* ============================================================
+   CONFIG — the only section you should need to touch day-to-day
+   ============================================================ */
+const CONFIG = {
+  // Once you deploy supabase/functions/l2l-proxy, point this at it.
+  // Example: "https://abcxyz.supabase.co/functions/v1/l2l-proxy"
+  // NEVER put your L2L API key directly in this file — that's the exact
+  // problem the proxy function exists to solve.
+  // Deployed under the function name "hyper-api" (the dashboard's default
+  // template name) rather than "l2l-proxy" — same code, different slug.
+  // Rename later by creating a new function called l2l-proxy and deleting
+  // this one, if you want; not required for it to work.
+  PROXY_URL: "https://ymwiylhpxryrmqgkzxth.supabase.co/functions/v1/hyper-api",
+
+  // Same Supabase project as the proxy above, but talked to directly from
+  // the browser this time (not through an Edge Function) so the Today's
+  // Schedule and Production cards can read/write their shared tables.
+  // Project Settings → API in your Supabase dashboard has both of these.
+  // SUPABASE_ANON_KEY is the "anon public" key — unlike the L2L key, this
+  // one is *meant* to be public and safe to ship in client code; it can
+  // only do what each table's Row Level Security policies allow it to do
+  // (see supabase/schedule_state.sql and supabase/production_actuals.sql).
+  SUPABASE_URL: "https://ymwiylhpxryrmqgkzxth.supabase.co",
+  SUPABASE_ANON_KEY: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inltd2l5bGhweHJ5cm1xZ2t6eHRoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODg4NzU2NzEsImV4cCI6MjEwNDQ1MTY3MX0.yuyvovUt4nlL7UcI8Z7QUsqtG4wPSV4kHBDUerhmcTU",
+
+  SITE_NUMBER: 2,
+  REFRESH_INTERVAL_MS: 60000, // pull fresh numbers every 60s, no clicking needed
+
+  // OEE status thresholds — adjust to your plant's real targets.
+  OEE_GOOD: 85,   // at/above this = green ("on target")
+  OEE_WARN: 65,   // at/above this (but below GOOD) = yellow; below this = red
+
+  // Production attainment thresholds (actual ÷ scheduled target, averaged
+  // across cases and pounds). Same green/yellow/red idea as OEE above —
+  // tune these to whatever your floor considers "on pace."
+  PRODUCTION_GOOD: 95,
+  PRODUCTION_WARN: 75,
+
+  LINES: [
+    { name: "2A",   code: "BP-LINE1" },
+    { name: "PMX6", code: "BP-LINE2" }, // was "PXM6" in the original file — typo fixed
+    { name: "MP4",  code: "BP-LINE3" },
+    { name: "PL1",  code: "BP-LINE4" },
+    { name: "PL2",  code: "BP-LINE5" },
+    { name: "2E",   code: "BP-LINE6" },
+    // Your line list also includes 2F — add it here with its real BP-LINE
+    // code once you have it: { name: "2F", code: "BP-LINEx" },
+  ],
+};
+
+/* ============================================================
+   STATE
+   ============================================================ */
+let currentLine = CONFIG.LINES[0];
+let lastGoodData = null;   // keep showing this if a refresh fails
+let lastGoodAt = null;
+let refreshTimer = null;
+let overviewTimer = null;
+let viewMode = "overview"; // "overview" | "line" — the dashboard opens on the plant-wide view
+let mode = "live";         // "live" | "range" — only meaningful once a line is open
+let rangeStart = null;     // "YYYY-MM-DD", set once the user hits View
+let rangeEnd = null;
+
+/* ============================================================
+   DATA FETCH
+   ============================================================ */
+async function fetchLineMetrics(line, start, end) {
+  const params = new URLSearchParams({
+    line: line.code,
+    site: String(CONFIG.SITE_NUMBER),
+    start,
+    end,
+  });
+  const url = `${CONFIG.PROXY_URL}?${params.toString()}`;
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 10000);
+  try {
+    const res = await fetch(url, { signal: controller.signal });
+    const body = await res.json();
+    if (!res.ok || body.error) {
+      throw new Error(body.error || `Request failed (HTTP ${res.status})`);
+    }
+    return body;
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+async function refresh() {
+  const today = todayStr();
+  const start = mode === "range" ? rangeStart : today;
+  const end = mode === "range" ? rangeEnd : today;
+  if (!start || !end) return; // range mode with nothing picked yet — nothing to fetch
+
+  try {
+    const data = await fetchLineMetrics(currentLine, start, end);
+    lastGoodData = data;
+    lastGoodAt = new Date();
+    renderData(data);
+    showError(null);
+  } catch (err) {
+    // Key difference from the original: a failed call no longer silently
+    // shows 0% OEE. We keep the last known-good numbers on screen and say
+    // plainly that the connection dropped, so nobody on the floor mistakes
+    // "we can't reach L2L" for "the line is down."
+    if (lastGoodData) {
+      showError(`Can't reach L2L right now — showing data from ${formatTime(lastGoodAt)}.`);
+    } else {
+      showError(`Can't reach L2L right now: ${err.message}`);
+    }
+  }
+  updateStatusLine();
+}
+
+/* ============================================================
+   RENDER — line detail
+   ============================================================ */
+function statusFor(oee) {
+  if (oee >= CONFIG.OEE_GOOD) return { color: "var(--good)",     label: "On target" };
+  if (oee >= CONFIG.OEE_WARN) return { color: "var(--warning)",  label: "Below target" };
+  return                              { color: "var(--critical)", label: "Critical" };
+}
+
+function renderData(data) {
+  document.getElementById("line-name-1").textContent = currentLine.name;
+  document.getElementById("line-code-label").textContent = currentLine.code;
+  document.getElementById("oee-period-suffix").textContent = ` · ${periodLabel()}`;
+  document.getElementById("dt-card-title").textContent = `Total Downtime — ${periodLabel()}`;
+  document.getElementById("breakdown-card-title").textContent = `Dispatches — ${periodLabel()}`;
+
+  const oeePeriodNoteEl = document.getElementById("oee-period-note");
+  if (data.day_count > 1) {
+    // See the proxy function's comment: this is a simple average of daily
+    // OEE percentages across the range, not a properly weighted OEE. Said
+    // plainly here so nobody on the floor reads it as the exact formula.
+    oeePeriodNoteEl.textContent = `Simple average across ${data.day_count} days`;
+    oeePeriodNoteEl.hidden = false;
+  } else {
+    oeePeriodNoteEl.hidden = true;
+  }
+
+  const oee = round1(data.oee);
+  const { color, label } = statusFor(oee);
+
+  const oeeValueEl = document.getElementById("oee-value");
+  oeeValueEl.textContent = `${oee}%`;
+  oeeValueEl.classList.remove("skeleton");
+
+  // The dot carries the status color; the label text stays neutral ink —
+  // the light theme's warning yellow is too pale to read reliably as text
+  // on a white card (status colors are fixed, not something to re-tune per
+  // theme, so the dot is the right place for that color, not the words).
+  document.getElementById("oee-status-label").textContent = label;
+  document.getElementById("oee-dot").style.background = color;
+
+  const fillEl = document.getElementById("oee-fill");
+  fillEl.style.width = `${Math.max(0, Math.min(100, oee))}%`;
+  fillEl.style.background = color;
+  // Track = a lighter step of the same hue as the fill, so the whole bar
+  // reads as one state rather than two unrelated colors.
+  fillEl.parentElement.style.background = colorMix(color, 0.16);
+
+  const totalDtEl = document.getElementById("total-dt-value");
+  totalDtEl.textContent = `${round1(data.total_dt)}`;
+  totalDtEl.classList.remove("skeleton");
+
+  renderDispatches(data);
+}
+
+// Same dot-carries-the-color / text-stays-neutral pattern as the OEE status
+// dot — these badges stay legible regardless of which hue they're showing.
+const TYPE_COLORS   = { red: "#d03b3b", yellow: "#fab219", other: "#868ea3" };
+const STATUS_COLORS = { open: "#d03b3b", resolved: "#0ca30c", unknown: "#868ea3" };
+
+function renderDispatches(data) {
+  const body = document.getElementById("breakdown-body");
+  const rows = Array.isArray(data.dispatches) ? data.dispatches : [];
+
+  if (rows.length === 0) {
+    body.innerHTML = `<div class="empty-state">No dispatches recorded for ${periodLabel().toLowerCase()}</div>`;
+    return;
+  }
+
+  const totalMinutes = rows.reduce((sum, d) => sum + Number(d.minutes || 0), 0);
+
+  const trs = rows.map(d => {
+    const typeColor = TYPE_COLORS[d.type_key] || TYPE_COLORS.other;
+    const statusColor = STATUS_COLORS[d.status_key] || STATUS_COLORS.unknown;
+    return `
+      <tr>
+        <td>${formatDispatchTime(d.time)}</td>
+        <td class="reason-cell" title="${escapeHtml(d.reason)}">${escapeHtml(d.reason)}</td>
+        <td>
+          <span class="pill" style="background:${tint(typeColor, 0.14)}">
+            <span class="dot" style="background:${typeColor}"></span>${escapeHtml(d.type_label)}
+          </span>
+        </td>
+        <td class="num-cell">${round1(d.minutes)}m</td>
+        <td>
+          <span class="pill" style="background:${tint(statusColor, 0.14)}">
+            <span class="dot" style="background:${statusColor}"></span>${escapeHtml(d.status_label)}
+          </span>
+        </td>
+      </tr>`;
+  }).join("");
+
+  body.innerHTML = `
+    <div class="dispatch-summary">${rows.length} dispatch${rows.length === 1 ? "" : "es"} · ${round1(totalMinutes)}m total</div>
+    <div class="dispatch-table-wrap">
+      <table class="dispatch-table">
+        <thead>
+          <tr><th>Time</th><th>Reason</th><th>Type</th><th>Duration</th><th>Status</th></tr>
+        </thead>
+        <tbody>${trs}</tbody>
+      </table>
+    </div>
+  `;
+}
+
+function formatDispatchTime(raw) {
+  if (!raw) return "—";
+  const d = new Date(raw);
+  if (isNaN(d.getTime())) return String(raw); // unrecognized format — show it verbatim rather than hide it
+  const timePart = d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+  if (mode === "range" && rangeStart !== rangeEnd) {
+    return `${d.toLocaleDateString([], { month: "short", day: "numeric" })} ${timePart}`;
+  }
+  return timePart;
+}
+
+// A light tint of a status color for pill backgrounds, mixed against white
+// since these pills always sit on the (white) card surface.
+function tint(hex, alpha) {
+  return `color-mix(in srgb, ${hex} ${alpha * 100}%, white)`;
+}
+
+function escapeHtml(s) {
+  return String(s).replace(/[&<>"']/g, c => ({
+    "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;",
+  }[c]));
+}
+
+function showError(message) {
+  const banner = document.getElementById("error-banner");
+  if (!message) {
+    banner.hidden = true;
+    banner.textContent = "";
+  } else {
+    banner.hidden = false;
+    banner.textContent = message;
+  }
+}
+
+function updateStatusLine() {
+  const el = document.getElementById("status-line");
+  if (!lastGoodAt) {
+    el.textContent = "Waiting for first update…";
+    return;
+  }
+  if (mode === "live") {
+    el.textContent = `Updated ${formatTime(lastGoodAt)} · refreshes every ${CONFIG.REFRESH_INTERVAL_MS / 1000}s`;
+  } else {
+    el.textContent = `Updated ${formatTime(lastGoodAt)} · showing ${periodLabel()} · tap Refresh for the latest`;
+  }
+}
+
+/* ============================================================
+   NAV / VIEW MODE (Overview <-> a specific line's detail)
+   ============================================================ */
+function buildTabs() {
+  const nav = document.getElementById("line-tabs");
+  nav.innerHTML = "";
+
+  const overviewBtn = document.createElement("button");
+  overviewBtn.type = "button";
+  overviewBtn.textContent = "Overview";
+  overviewBtn.className = "tab-overview";
+  overviewBtn.setAttribute("role", "tab");
+  overviewBtn.setAttribute("aria-selected", viewMode === "overview" ? "true" : "false");
+  overviewBtn.addEventListener("click", () => setViewMode("overview"));
+  nav.appendChild(overviewBtn);
+
+  const divider = document.createElement("div");
+  divider.className = "tab-divider";
+  nav.appendChild(divider);
+
+  CONFIG.LINES.forEach(line => {
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.textContent = line.name;
+    btn.setAttribute("role", "tab");
+    btn.setAttribute("aria-selected", (viewMode === "line" && line.code === currentLine.code) ? "true" : "false");
+    btn.addEventListener("click", () => setViewMode("line", line));
+    nav.appendChild(btn);
+  });
+}
+
+// The single place that switches between the plant-wide Overview and a
+// specific line's detail — everything else (nav highlighting, which
+// section is visible, which auto-refresh timer is running) follows from
+// this one call so the two views can never both be "live" at once wasting
+// requests on a Pi that's only showing one of them.
+function setViewMode(newMode, line) {
+  viewMode = newMode;
+  if (newMode === "line" && line) currentLine = line;
+
+  document.getElementById("overview-view").hidden = viewMode !== "overview";
+  document.getElementById("line-view").hidden = viewMode !== "line";
+  document.getElementById("mode-row").hidden = viewMode !== "line";
+  buildTabs();
+
+  if (viewMode === "overview") {
+    stopAutoRefresh();
+    refreshOverview();
+    startOverviewAutoRefresh();
+  } else {
+    stopOverviewAutoRefresh();
+    resetLoadingState();
+    refresh();
+    if (mode === "live") startAutoRefresh(); else stopAutoRefresh();
+    renderScheduleItems(); // schedule card is scoped to whichever line is active
+    refreshProductionCard();
+  }
+}
+
+// Kept so a line tab click (and the Playwright tests from earlier in this
+// build) can jump straight into a line's detail view without knowing about
+// setViewMode's second argument.
+function selectLine(line) {
+  setViewMode("line", line);
+}
+
+/* ============================================================
+   OVERVIEW — plant-wide landing view
+   ------------------------------------------------------------
+   Fetches all lines in parallel (Promise.all, not one-at-a-time) so a
+   6-line plant doesn't take 6x as long to paint as a single line does.
+   Each card is independent: one line's L2L call failing shows that one
+   card as offline instead of blanking the whole page.
+   ============================================================ */
+async function refreshOverview() {
+  const today = todayStr();
+  const results = await Promise.all(CONFIG.LINES.map(async line => {
+    try {
+      const data = await fetchLineMetrics(line, today, today);
+      return { line, data, error: null };
+    } catch (err) {
+      return { line, data: null, error: err.message || String(err) };
+    }
+  }));
+  renderOverview(results);
+  document.getElementById("status-line").textContent =
+    `Plant overview updated ${formatTime(new Date())} · refreshes every ${CONFIG.REFRESH_INTERVAL_MS / 1000}s`;
+  document.getElementById("line-code-label").textContent = `${CONFIG.LINES.length} lines`;
+}
+
+function renderOverview(results) {
+  const summaryEl = document.getElementById("overview-summary");
+  const gridEl = document.getElementById("overview-grid");
+  const today = todayStr();
+
+  const ok = results.filter(r => r.data);
+  const avgOee = ok.length ? ok.reduce((s, r) => s + Number(r.data.oee || 0), 0) / ok.length : null;
+  const totalDt = ok.reduce((s, r) => s + Number(r.data.total_dt || 0), 0);
+  const openDispatches = ok.reduce((s, r) => s + (r.data.dispatches || []).filter(d => d.status_key === "open").length, 0);
+  const belowTarget = ok.filter(r => Number(r.data.oee || 0) < CONFIG.OEE_GOOD).length;
+
+  summaryEl.innerHTML = `
+    <div class="mini-stat"><div class="mini-value">${avgOee === null ? "—" : round1(avgOee) + "%"}</div><div class="mini-label">Plant Avg OEE</div></div>
+    <div class="mini-stat"><div class="mini-value">${round1(totalDt)}</div><div class="mini-label">Downtime (min)</div></div>
+    <div class="mini-stat"><div class="mini-value">${openDispatches}</div><div class="mini-label">Open Dispatches</div></div>
+    <div class="mini-stat"><div class="mini-value">${belowTarget} / ${CONFIG.LINES.length}</div><div class="mini-label">Lines Below Target</div></div>
+  `;
+
+  gridEl.innerHTML = results.map(r => {
+    if (!r.data) {
+      return `
+        <article class="line-card status-offline">
+          <div class="line-card-head">
+            <div>
+              <div class="line-card-name">${escapeHtml(r.line.name)}</div>
+              <div class="line-card-code">${escapeHtml(r.line.code)}</div>
+            </div>
+          </div>
+          <div class="line-card-error">Can't reach L2L: ${escapeHtml(r.error)}</div>
+        </article>`;
+    }
+
+    const oee = round1(r.data.oee);
+    const { color, label } = statusFor(oee);
+    const statusClass = oee >= CONFIG.OEE_GOOD ? "status-good" : oee >= CONFIG.OEE_WARN ? "status-warning" : "status-critical";
+    const dispatches = r.data.dispatches || [];
+    const openCount = dispatches.filter(d => d.status_key === "open").length;
+
+    const target = computeScheduleTargets(r.line.name, today);
+    const actual = productionActuals[actualKey(r.line, today)] || {};
+    let prodHtml = "";
+    if (target && (target.cases || target.lbs)) {
+      const pct = attainmentPct(target, actual);
+      const clamped = Math.max(0, Math.min(100, pct));
+      prodHtml = `
+        <div class="line-card-row"><span>Production</span><strong>${round1(pct)}% of target</strong></div>
+        <div class="meter-track"><div class="meter-fill" style="width:${clamped}%; background:${attainmentStatus(pct).color};"></div></div>`;
+    }
+
+    return `
+      <article class="line-card ${statusClass} clickable" data-line-code="${escapeHtml(r.line.code)}">
+        <div class="line-card-head">
+          <div>
+            <div class="line-card-name">${escapeHtml(r.line.name)}</div>
+            <div class="line-card-code">${escapeHtml(r.line.code)}</div>
+          </div>
+          <div class="line-card-oee">${oee}%</div>
+        </div>
+        <div class="line-card-row"><span>Status</span><strong style="color:${color}">${escapeHtml(label)}</strong></div>
+        <div class="line-card-row"><span>Downtime</span><strong>${round1(r.data.total_dt)} min</strong></div>
+        <div class="line-card-row"><span>Dispatches</span><strong>${dispatches.length}${openCount ? ` (${openCount} open)` : ""}</strong></div>
+        ${prodHtml}
+      </article>`;
+  }).join("");
+
+  gridEl.querySelectorAll(".line-card[data-line-code]").forEach(card => {
+    card.addEventListener("click", () => {
+      const line = CONFIG.LINES.find(l => l.code === card.dataset.lineCode);
+      if (line) setViewMode("line", line);
+    });
+  });
+}
+
+function startOverviewAutoRefresh() {
+  stopOverviewAutoRefresh();
+  overviewTimer = setInterval(refreshOverview, CONFIG.REFRESH_INTERVAL_MS);
+}
+function stopOverviewAutoRefresh() {
+  if (overviewTimer) clearInterval(overviewTimer);
+  overviewTimer = null;
+}
+
+/* ============================================================
+   MODE TOGGLE (Live / Date Range) — line detail only
+   ============================================================ */
+const liveBtn = document.getElementById("mode-live-btn");
+const rangeModeBtn = document.getElementById("mode-range-btn");
+const rangeBar = document.getElementById("range-bar");
+const rangeStartInput = document.getElementById("range-start-input");
+const rangeEndInput = document.getElementById("range-end-input");
+const rangeViewBtn = document.getElementById("range-view-btn");
+const rangeRefreshBtn = document.getElementById("range-refresh-btn");
+
+function setMode(newMode) {
+  mode = newMode;
+  liveBtn.setAttribute("aria-pressed", mode === "live" ? "true" : "false");
+  rangeModeBtn.setAttribute("aria-pressed", mode === "range" ? "true" : "false");
+  rangeBar.hidden = mode !== "range";
+
+  if (mode === "live") {
+    rangeRefreshBtn.hidden = true;
+    startAutoRefresh();
+    resetLoadingState();
+    refresh();
+  } else {
+    // Historical data doesn't change out from under you, so there's no
+    // point re-polling it every 60s the way Live mode does.
+    stopAutoRefresh();
+  }
+}
+
+function startAutoRefresh() {
+  stopAutoRefresh();
+  refreshTimer = setInterval(refresh, CONFIG.REFRESH_INTERVAL_MS);
+}
+function stopAutoRefresh() {
+  if (refreshTimer) clearInterval(refreshTimer);
+  refreshTimer = null;
+}
+
+liveBtn.addEventListener("click", () => setMode("live"));
+rangeModeBtn.addEventListener("click", () => setMode("range"));
+
+rangeViewBtn.addEventListener("click", () => {
+  const start = rangeStartInput.value;
+  const end = rangeEndInput.value;
+  if (!start || !end) {
+    showError("Pick both a start and an end date first.");
+    return;
+  }
+  if (start > end) {
+    showError("Start date must be on or before the end date.");
+    return;
+  }
+  rangeStart = start;
+  rangeEnd = end;
+  rangeRefreshBtn.hidden = false;
+  resetLoadingState();
+  refresh();
+});
+
+rangeRefreshBtn.addEventListener("click", () => {
+  resetLoadingState();
+  refresh();
+});
+
+function resetLoadingState() {
+  lastGoodData = null;
+  lastGoodAt = null;
+  document.getElementById("oee-value").textContent = "Loading…";
+  document.getElementById("oee-value").classList.add("skeleton");
+  document.getElementById("total-dt-value").textContent = "Loading…";
+  document.getElementById("total-dt-value").classList.add("skeleton");
+}
+
+/* ============================================================
+   TODAY'S SCHEDULE (weekly planner upload)
+   ------------------------------------------------------------
+   Your planner's .xlsb export repeats a block per line, per day:
+   a "LINE: <code>   DATE/DAY: <date>" header row, a column-header
+   row right under it, then one row per item — or a "CHANGEOVER #n"
+   marker row, or a blank "Name" placeholder row for an unused
+   slot — ending in a "Total" row. This walks that shape straight
+   out of the raw grid with SheetJS, entirely in the browser: no
+   server round-trip, no file leaving this machine.
+
+   The uploaded file and every checked-off item live in one shared Supabase
+   table (schedule_state) — so whoever uploads this week's file on one
+   screen, everyone else's dashboard picks it up too (on the next 60s sync,
+   or immediately on their next page load), and a checkbox ticked on the
+   line 1 kiosk shows as ticked on the office monitor as well. The
+   Production card below also reads this same data to compute each line's
+   Target Cases / Target Pounds for today.
+
+   Two honest caveats, worth knowing before you lean on this:
+
+   1) L2L's own docs weren't reachable to confirm any write-back endpoint,
+      so "checking off" an item here is shared across every screen viewing
+      *this dashboard*, but it is NOT written back to L2L itself. If you
+      ever confirm a real L2L endpoint for marking an order/dispatch
+      complete, this is the one place that would need to change to write
+      through to L2L for real.
+   2) The planner file spells one line "PXM6"; the dashboard (after
+      fixing your original code's typo) calls it "PMX6" —
+      SCHEDULE_LINE_ALIASES below maps the planner's spelling onto
+      the dashboard's so the two line names still match up.
+
+   Setup (one-time): run supabase/schedule_state.sql in your Supabase
+   project's SQL Editor, then paste your anon public key into
+   CONFIG.SUPABASE_ANON_KEY above. Until that key is set, this card still
+   works for parsing/viewing a freshly-uploaded file — it just can't save
+   or load anything, and will tell you so.
+   ============================================================ */
+const SCHEDULE_LINE_ALIASES = { "PXM6": "PMX6" };
+
+// Supabase client shared by the schedule feature and the Production card —
+// talks directly to the database (through each table's RLS policies),
+// separate from the l2l-proxy Edge Function used for OEE/dispatch data
+// above. Left null (rather than throwing) if the anon key hasn't been
+// filled in yet, so the rest of the dashboard still works while these two
+// cards wait to be wired up.
+const sb = (window.supabase && CONFIG.SUPABASE_URL && CONFIG.SUPABASE_ANON_KEY
+    && !CONFIG.SUPABASE_ANON_KEY.startsWith("PASTE-"))
+  ? window.supabase.createClient(CONFIG.SUPABASE_URL, CONFIG.SUPABASE_ANON_KEY)
+  : null;
+
+let scheduleBlocks = [];     // [{ lineCode, date: "YYYY-MM-DD", items: [...] }]
+let scheduleMeta = null;     // { filename, uploadedAt }
+let scheduleCompleted = {};  // { itemKey: true }
+let selectedScheduleDate = null;
+
+function excelSerialToIsoDate(serial) {
+  // Standard Excel-serial-to-date conversion, including the classic "Excel
+  // thinks 1900 was a leap year" quirk — the same math Excel itself uses.
+  const utcDays = Math.floor(serial - 25569);
+  const d = new Date(utcDays * 86400 * 1000);
+  const y = d.getUTCFullYear();
+  const m = String(d.getUTCMonth() + 1).padStart(2, "0");
+  const day = String(d.getUTCDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
+}
+
+function normalizeScheduleLineCode(raw) {
+  const key = String(raw ?? "").trim().toUpperCase();
+  return SCHEDULE_LINE_ALIASES[key] || key;
+}
+
+function formatScheduleTime(val) {
+  if (val === null || val === undefined || val === "") return "";
+  if (typeof val === "number") {
+    // Excel time-of-day serial: the fractional part of a day (0..1).
+    const frac = val - Math.floor(val);
+    const totalSeconds = Math.round(frac * 86400);
+    const d = new Date();
+    d.setHours(Math.floor(totalSeconds / 3600), Math.floor((totalSeconds % 3600) / 60), 0, 0);
+    return d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+  }
+  return String(val);
+}
+
+function fmtScheduleNum(n) {
+  if (n === null || n === undefined || n === "") return null;
+  const num = Number(n);
+  return isNaN(num) ? String(n) : num.toLocaleString();
+}
+
+function parseScheduleWorkbook(workbook) {
+  const sheetName = workbook.SheetNames.includes("SCHEDULE") ? "SCHEDULE" : workbook.SheetNames[0];
+  const ws = workbook.Sheets[sheetName];
+  const rows = XLSX.utils.sheet_to_json(ws, { header: 1, raw: true, defval: null });
+
+  const blocks = [];
+  for (let r = 0; r < rows.length; r++) {
+    const row = rows[r] || [];
+    // Each per-line/per-day block starts with a row that has "LINE:" in
+    // column H and "DATE/DAY:" in column M (0-indexed 7 and 12) — verified
+    // against Albert's real weekly export, across several differently
+    // laid-out blocks in that same file.
+    if (row[7] !== "LINE:" || row[12] !== "DATE/DAY:") continue;
+
+    const lineCode = normalizeScheduleLineCode(row[8]);
+    const dateIso = typeof row[13] === "number" ? excelSerialToIsoDate(row[13]) : null;
+    if (!lineCode || !dateIso) continue;
+
+    // The column-header row's exact shape varies between blocks in the real
+    // file (some repeat "ITEM CODE" on the LINE: row itself, some use a
+    // "LABEL" column instead of "ITEM CODE"/"FORMULA#"/"Process Order#") —
+    // but every block's header row has "PRODUCT" in column M (index 12), so
+    // that's the one anchor to search for instead of assuming a fixed shape.
+    let headerRowIdx = -1;
+    for (let h = r + 1; h < Math.min(r + 6, rows.length); h++) {
+      if ((rows[h] || [])[12] === "PRODUCT") { headerRowIdx = h; break; }
+    }
+    if (headerRowIdx === -1) continue; // doesn't match the expected shape — skip rather than guess
+
+    const items = [];
+    let cursor = headerRowIdx + 1;
+    while (cursor < rows.length && cursor - headerRowIdx < 150) {
+      const item = rows[cursor] || [];
+      if (item[7] === "LINE:" && item[12] === "DATE/DAY:") break; // hit the next block — stop
+      const code = item[4];
+      const codeStr = code === null || code === undefined ? "" : String(code).trim();
+      if (!codeStr) { cursor++; continue; }                          // blank spacer row
+      if (codeStr.toLowerCase() === "total") break;                  // end of this block
+      if (codeStr.toLowerCase() === "name") { cursor++; continue; }  // unused schedule slot
+      const product = item[12] != null ? String(item[12]).trim() : "";
+      if (!product) {
+        // No product name means this isn't a production item — it's a
+        // section marker like "CHANGEOVER #1" or "LINE SET-UP". Still worth
+        // showing as something the floor can check off, just not as a
+        // "product."
+        items.push({ kind: "task", label: codeStr });
+        cursor++;
+        continue;
+      }
+      items.push({
+        kind: "item",
+        itemCode: codeStr,
+        processOrder: item[6] != null ? String(item[6]).trim() : "",
+        batches: item[7],
+        cases: item[8],
+        totalLbs: item[9],
+        timeStart: item[11],
+        product,
+        packSize: item[14] != null ? String(item[14]).trim() : "",
+      });
+      cursor++;
+    }
+    blocks.push({ lineCode, date: dateIso, items });
+  }
+  return blocks;
+}
+
+function scheduleItemKey(block, item, idx) {
+  return [block.lineCode, block.date, item.kind, item.itemCode || item.label || "", item.processOrder || "", idx].join("|");
+}
+
+// A dedicated, small error line inside the schedule card — deliberately
+// separate from the top-level #error-banner used for L2L connectivity, so a
+// successful schedule sync can never silently clear an unrelated "can't
+// reach L2L" warning, and vice versa.
+function showScheduleError(message) {
+  const el = document.getElementById("schedule-error");
+  if (!message) {
+    el.hidden = true;
+    el.textContent = "";
+    el.classList.remove("is-error");
+  } else {
+    el.hidden = false;
+    el.textContent = message;
+    el.classList.add("is-error");
+  }
+}
+
+async function loadScheduleFromSupabase() {
+  if (!sb) return; // not configured yet — leave whatever's already in memory
+  try {
+    const { data, error } = await sb
+      .from("schedule_state")
+      .select("blocks, meta, completed")
+      .eq("id", "current")
+      .maybeSingle();
+    if (error) throw error;
+    scheduleBlocks = (data && data.blocks) || [];
+    scheduleMeta = (data && data.meta) || null;
+    scheduleCompleted = (data && data.completed) || {};
+    showScheduleError(null);
+  } catch (err) {
+    // A failed sync keeps whatever was already rendered rather than
+    // blanking the card — same "don't hide last-known-good" rule as the
+    // OEE/dispatch data uses.
+    console.error("Couldn't load the shared schedule from Supabase:", err);
+    showScheduleError(`Couldn't load the shared schedule: ${err.message || err}`);
+  }
+}
+
+// Every upload, clear, and checkbox toggle calls this — it always writes
+// the whole {blocks, meta, completed} row back in one upsert. Simpler than
+// patching individual jsonb fields, and small enough (a week of one plant's
+// schedule) that re-sending the full row on every checkbox tap is cheap.
+async function saveScheduleState() {
+  if (!sb) {
+    showScheduleError("Schedule isn't connected to Supabase yet — set CONFIG.SUPABASE_ANON_KEY (see the comment above CONFIG).");
+    return false;
+  }
+  try {
+    const { error } = await sb.from("schedule_state").upsert({
+      id: "current",
+      blocks: scheduleBlocks,
+      meta: scheduleMeta,
+      completed: scheduleCompleted,
+      updated_at: new Date().toISOString(),
+    });
+    if (error) throw error;
+    showScheduleError(null);
+    return true;
+  } catch (err) {
+    showScheduleError(`Couldn't save — your change is visible here but hasn't synced yet: ${err.message || err}`);
+    return false;
+  }
+}
+
+function scheduleDates() {
+  return [...new Set(scheduleBlocks.map(b => b.date))].sort();
+}
+
+function ensureSelectedScheduleDate() {
+  const dates = scheduleDates();
+  if (dates.length === 0) { selectedScheduleDate = null; return; }
+  if (selectedScheduleDate && dates.includes(selectedScheduleDate)) return;
+  selectedScheduleDate = dates.includes(todayStr()) ? todayStr() : dates[0];
+}
+
+function renderScheduleDayStrip() {
+  const strip = document.getElementById("schedule-day-strip");
+  const dates = scheduleDates();
+  if (dates.length === 0) { strip.innerHTML = ""; return; }
+  // Some real exports carry leftover blocks from older weeks further down
+  // the same sheet, so more dates than just "this week" can show up here.
+  // Rather than guess which ones to hide, they all get a chip — sorted
+  // chronologically, with the selected one scrolled into view so a longer
+  // strip never buries the day you actually want.
+  strip.innerHTML = dates.map(iso => {
+    const [y, m, d] = iso.split("-").map(Number);
+    const dObj = new Date(y, m - 1, d);
+    const dow = dObj.toLocaleDateString([], { weekday: "short" });
+    const md = dObj.toLocaleDateString([], { month: "short", day: "numeric" });
+    const selected = iso === selectedScheduleDate;
+    return `<button type="button" class="schedule-day-chip" data-date="${iso}" aria-selected="${selected}"><span class="dow">${dow}</span>${md}</button>`;
+  }).join("");
+  strip.querySelectorAll(".schedule-day-chip").forEach(btn => {
+    btn.addEventListener("click", () => {
+      selectedScheduleDate = btn.dataset.date;
+      renderScheduleDayStrip();
+      renderScheduleItems();
+    });
+    if (btn.getAttribute("aria-selected") === "true") {
+      btn.scrollIntoView({ inline: "center", block: "nearest" });
+    }
+  });
+}
+
+function renderScheduleItems() {
+  const list = document.getElementById("schedule-list");
+  const progressEl = document.getElementById("schedule-progress");
+
+  if (scheduleBlocks.length === 0) {
+    list.innerHTML = `<div class="empty-state">Upload this week's planner schedule (.xlsb) to see products for this line.</div>`;
+    progressEl.textContent = "";
+    return;
+  }
+
+  const block = scheduleBlocks.find(b => b.lineCode === currentLine.name.toUpperCase() && b.date === selectedScheduleDate);
+  if (!block || block.items.length === 0) {
+    list.innerHTML = `<div class="empty-state">No schedule found for ${escapeHtml(currentLine.name)} on ${selectedScheduleDate ? formatDateLabel(selectedScheduleDate) : "this day"}.</div>`;
+    progressEl.textContent = "";
+    return;
+  }
+
+  // A block that's all changeover/task markers and zero real items isn't a
+  // parsing failure — I traced this against the raw file (two different
+  // libraries agreed): those product cells are genuinely blank in the
+  // planner export, not lost in translation. Say so plainly instead of
+  // leaving a bare wall of "CHANGEOVER" rows that reads like a bug.
+  const hasRealItems = block.items.some(i => i.kind === "item");
+  const noteHtml = hasRealItems ? "" : `
+    <div class="empty-state" style="padding:10px 0 16px;">No products were entered for ${escapeHtml(currentLine.name)} on ${formatDateLabel(block.date)} — only changeover markers were filled in on the planner.</div>`;
+
+  list.innerHTML = noteHtml + block.items.map((item, idx) => {
+    const key = scheduleItemKey(block, item, idx);
+    const done = !!scheduleCompleted[key];
+    if (item.kind === "task") {
+      return `
+        <label class="schedule-item task-item${done ? " is-complete" : ""}">
+          <input type="checkbox" data-key="${escapeHtml(key)}" ${done ? "checked" : ""}>
+          <div class="schedule-item-body">
+            <div class="schedule-item-product">${escapeHtml(item.label)}</div>
+          </div>
+        </label>`;
+    }
+    // What shows per item: Item Code, Product, Cases Needed, Total Pounds —
+    // exactly the four fields Albert asked for, nothing extra crowding a
+    // "small section" card. (Pack size / batches / start time are still in
+    // the parsed data if a future ask wants them back.)
+    const metaParts = [];
+    if (item.itemCode) metaParts.push(`Item ${escapeHtml(item.itemCode)}`);
+    if (item.cases !== null && item.cases !== undefined && item.cases !== "") metaParts.push(`${fmtScheduleNum(item.cases)} cases needed`);
+    if (item.totalLbs !== null && item.totalLbs !== undefined && item.totalLbs !== "") metaParts.push(`${fmtScheduleNum(Math.round(Number(item.totalLbs)))} lbs`);
+    return `
+      <label class="schedule-item${done ? " is-complete" : ""}">
+        <input type="checkbox" data-key="${escapeHtml(key)}" ${done ? "checked" : ""}>
+        <div class="schedule-item-body">
+          <div class="schedule-item-product">${escapeHtml(item.product)}</div>
+          <div class="schedule-item-meta">${metaParts.join(" · ")}</div>
+        </div>
+      </label>`;
+  }).join("");
+
+  list.querySelectorAll('input[type="checkbox"]').forEach(cb => {
+    cb.addEventListener("change", async () => {
+      const key = cb.dataset.key;
+      // Update the UI immediately (a floor employee shouldn't wait on a
+      // network round-trip to see their tap register), then sync in the
+      // background — saveScheduleState() surfaces a scoped error if it
+      // fails, without reverting what's on screen.
+      if (cb.checked) scheduleCompleted[key] = true; else delete scheduleCompleted[key];
+      cb.closest(".schedule-item").classList.toggle("is-complete", cb.checked);
+      updateScheduleProgress(block);
+      await saveScheduleState();
+    });
+  });
+
+  updateScheduleProgress(block);
+}
+
+function updateScheduleProgress(block) {
+  const progressEl = document.getElementById("schedule-progress");
+  const total = block.items.length;
+  const done = block.items.filter((item, idx) => scheduleCompleted[scheduleItemKey(block, item, idx)]).length;
+  progressEl.textContent = `${done} of ${total} complete`;
+}
+
+function renderScheduleFileName() {
+  const el = document.getElementById("schedule-file-name");
+  const clearBtn = document.getElementById("schedule-clear-btn");
+  if (scheduleMeta) {
+    el.textContent = `${scheduleMeta.filename} · uploaded ${formatTime(new Date(scheduleMeta.uploadedAt))}`;
+    clearBtn.hidden = false;
+  } else {
+    el.textContent = "";
+    clearBtn.hidden = true;
+  }
+}
+
+function refreshScheduleUI() {
+  ensureSelectedScheduleDate();
+  renderScheduleDayStrip();
+  renderScheduleItems();
+  renderScheduleFileName();
+}
+
+document.getElementById("schedule-upload-btn").addEventListener("click", () => {
+  document.getElementById("schedule-file-input").click();
+});
+
+document.getElementById("schedule-file-input").addEventListener("change", async (e) => {
+  const file = e.target.files && e.target.files[0];
+  e.target.value = ""; // lets the same filename be re-selected later (e.g. next week's file, same name)
+  if (!file) return;
+  try {
+    const buffer = await file.arrayBuffer();
+    const workbook = XLSX.read(buffer, { type: "array" });
+    const blocks = parseScheduleWorkbook(workbook);
+    if (blocks.length === 0) {
+      showScheduleError("Couldn't find any LINE: / DATE-DAY: schedule blocks in that file — is it this week's planner export?");
+      return;
+    }
+    scheduleBlocks = blocks;
+    scheduleMeta = { filename: file.name, uploadedAt: new Date().toISOString() };
+    scheduleCompleted = {}; // a new upload is a new week — start its checkboxes fresh
+    selectedScheduleDate = null;
+    refreshScheduleUI(); // show it immediately — don't make the floor wait on the network to see what was just uploaded
+    if (viewMode === "line") refreshProductionCard(); // new schedule may change today's target for the open line
+    await saveScheduleState(); // then push it to Supabase so every other screen picks it up too
+  } catch (err) {
+    showScheduleError(`Couldn't read that schedule file: ${err.message}`);
+  }
+});
+
+document.getElementById("schedule-clear-btn").addEventListener("click", async () => {
+  scheduleBlocks = [];
+  scheduleMeta = null;
+  scheduleCompleted = {};
+  selectedScheduleDate = null;
+  refreshScheduleUI();
+  if (viewMode === "line") refreshProductionCard();
+  await saveScheduleState(); // clears it for every screen, not just this one
+});
+
+/* ============================================================
+   PRODUCTION — Target vs Actual (Cases & Pounds)
+   ------------------------------------------------------------
+   "Target" is computed, not typed in: it's the sum of Cases Needed / Total
+   Pounds across every real product row (kind:"item") in today's schedule
+   block for the currently open line — the same data already parsed for
+   the Today's Schedule card above, just totaled. If no schedule has been
+   uploaded, or today has no block for this line, there's simply no target
+   to show, and the card says so rather than showing a misleading "0."
+
+   "Actual" is typed in by an operator on the floor and shared the same way
+   the schedule checkboxes are: one row per line+day in a small Supabase
+   table (production_actuals), synced every 60s, with an optimistic local
+   update so a tap/keystroke shows immediately instead of waiting on the
+   network. Typing is debounced (saves ~800ms after the last keystroke, and
+   immediately on blur) so a fast typist doesn't fire a network request per
+   digit — important on a Pi sharing its connection with everything else in
+   the plant.
+
+   One-time setup: run supabase/production_actuals.sql in the same Supabase
+   project as schedule_state.sql. Reuses the same anon key already set in
+   CONFIG above — no new config needed.
+   ============================================================ */
+let productionActuals = {}; // { "LINECODE|YYYY-MM-DD": { cases, lbs } }
+const actualsSaveTimers = {};
+
+function computeScheduleTargets(lineName, date) {
+  const block = scheduleBlocks.find(b => b.lineCode === lineName.toUpperCase() && b.date === date);
+  if (!block) return null;
+  let cases = 0, lbs = 0, any = false;
+  block.items.forEach(item => {
+    if (item.kind !== "item") return;
+    any = true;
+    if (item.cases !== null && item.cases !== undefined && item.cases !== "") cases += Number(item.cases) || 0;
+    if (item.totalLbs !== null && item.totalLbs !== undefined && item.totalLbs !== "") lbs += Number(item.totalLbs) || 0;
+  });
+  return any ? { cases, lbs } : null;
+}
+
+function actualKey(line, date) {
+  return `${line.code}|${date}`;
+}
+
+// Attainment = actual ÷ target, averaged across cases and pounds when both
+// have a target (a line might only have one of the two filled in on a
+// given day's planner row).
+function attainmentPct(target, actual) {
+  const parts = [];
+  if (target.cases) parts.push((Number(actual.cases) || 0) / target.cases * 100);
+  if (target.lbs) parts.push((Number(actual.lbs) || 0) / target.lbs * 100);
+  if (!parts.length) return 0;
+  return parts.reduce((a, b) => a + b, 0) / parts.length;
+}
+
+function attainmentStatus(pct) {
+  if (pct >= CONFIG.PRODUCTION_GOOD) return { color: "var(--good)",     label: "On pace" };
+  if (pct >= CONFIG.PRODUCTION_WARN) return { color: "var(--warning)",  label: "Behind pace" };
+  return                                     { color: "var(--critical)", label: "Well behind pace" };
+}
+
+function showProductionError(message) {
+  const el = document.getElementById("prod-save-note");
+  if (!message) {
+    el.hidden = true;
+    el.textContent = "";
+    el.classList.remove("is-error");
+  } else {
+    el.hidden = false;
+    el.textContent = message;
+    el.classList.add("is-error");
+  }
+}
+
+async function loadProductionActuals() {
+  if (!sb) return;
+  try {
+    const { data, error } = await sb.from("production_actuals").select("line_code, date, actual_cases, actual_lbs");
+    if (error) throw error;
+    const map = {};
+    (data || []).forEach(row => {
+      map[`${row.line_code}|${row.date}`] = { cases: row.actual_cases, lbs: row.actual_lbs };
+    });
+    productionActuals = map;
+  } catch (err) {
+    console.error("Couldn't load production actuals from Supabase:", err);
+  }
+}
+
+async function flushActual(key) {
+  const rec = productionActuals[key];
+  if (!rec) return;
+  const [lineCode, date] = key.split("|");
+  if (!sb) {
+    showProductionError("Actuals aren't connected to Supabase yet — set CONFIG.SUPABASE_ANON_KEY (see the comment above CONFIG).");
+    return;
+  }
+  try {
+    const { error } = await sb.from("production_actuals").upsert({
+      line_code: lineCode,
+      date,
+      actual_cases: rec.cases === undefined ? null : rec.cases,
+      actual_lbs: rec.lbs === undefined ? null : rec.lbs,
+      updated_at: new Date().toISOString(),
+    });
+    if (error) throw error;
+    showProductionError(null);
+  } catch (err) {
+    showProductionError(`Couldn't save — visible here but hasn't synced yet: ${err.message || err}`);
+  }
+}
+
+function refreshProductionCard() {
+  const date = todayStr();
+  const target = computeScheduleTargets(currentLine.name, date);
+  const key = actualKey(currentLine, date);
+  const actual = productionActuals[key] || {};
+
+  const casesTargetEl = document.getElementById("prod-cases-target");
+  const lbsTargetEl = document.getElementById("prod-lbs-target");
+  if (target) {
+    casesTargetEl.innerHTML = `Target ${fmtScheduleNum(target.cases) ?? "0"} <span class="unit">cases</span>`;
+    lbsTargetEl.innerHTML = `Target ${fmtScheduleNum(Math.round(target.lbs)) ?? "0"} <span class="unit">lbs</span>`;
+  } else {
+    casesTargetEl.innerHTML = `<span class="prod-no-target">No schedule for today</span>`;
+    lbsTargetEl.innerHTML = "";
+  }
+
+  // Don't stomp on whichever input the operator is actively typing in —
+  // the 60s Supabase sync runs in the background regardless of focus.
+  const casesInput = document.getElementById("prod-cases-actual");
+  const lbsInput = document.getElementById("prod-lbs-actual");
+  if (document.activeElement !== casesInput) casesInput.value = actual.cases ?? "";
+  if (document.activeElement !== lbsInput) lbsInput.value = actual.lbs ?? "";
+
+  updateProductionMeter(target, actual);
+}
+
+function updateProductionMeter(target, actual) {
+  const fill = document.getElementById("prod-fill");
+  const label = document.getElementById("prod-attainment-label");
+  if (!target || (!target.cases && !target.lbs)) {
+    fill.style.width = "0%";
+    fill.parentElement.style.background = "var(--surface-2)";
+    label.textContent = "";
+    return;
+  }
+  const pct = attainmentPct(target, actual);
+  const clamped = Math.max(0, Math.min(100, pct));
+  const { color, label: statusLabel } = attainmentStatus(pct);
+  fill.style.width = `${clamped}%`;
+  fill.style.background = color;
+  fill.parentElement.style.background = colorMix(color, 0.16);
+  label.textContent = `${round1(pct)}% of today's target · ${statusLabel}`;
+}
+
+function handleActualInput(field, inputEl) {
+  const date = todayStr();
+  const key = actualKey(currentLine, date);
+  const raw = inputEl.value;
+  const num = raw === "" ? null : Number(raw);
+  productionActuals[key] = { ...(productionActuals[key] || {}), [field]: num };
+  updateProductionMeter(computeScheduleTargets(currentLine.name, date), productionActuals[key]);
+  clearTimeout(actualsSaveTimers[key]);
+  actualsSaveTimers[key] = setTimeout(() => flushActual(key), 800);
+}
+
+const prodCasesInput = document.getElementById("prod-cases-actual");
+const prodLbsInput = document.getElementById("prod-lbs-actual");
+prodCasesInput.addEventListener("input", () => handleActualInput("cases", prodCasesInput));
+prodLbsInput.addEventListener("input", () => handleActualInput("lbs", prodLbsInput));
+prodCasesInput.addEventListener("blur", () => {
+  const key = actualKey(currentLine, todayStr());
+  clearTimeout(actualsSaveTimers[key]);
+  flushActual(key);
+});
+prodLbsInput.addEventListener("blur", () => {
+  const key = actualKey(currentLine, todayStr());
+  clearTimeout(actualsSaveTimers[key]);
+  flushActual(key);
+});
+
+/* ============================================================
+   HELPERS
+   ============================================================ */
+function round1(n) {
+  return Math.round((Number(n) || 0) * 10) / 10;
+}
+
+function formatTime(date) {
+  return date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+}
+
+function todayStr() {
+  return new Date().toISOString().slice(0, 10);
+}
+
+function formatDateLabel(isoDate) {
+  const [y, m, d] = isoDate.split("-").map(Number);
+  return new Date(y, m - 1, d).toLocaleDateString([], { month: "short", day: "numeric" });
+}
+
+function periodLabel() {
+  if (mode === "live") return "Today";
+  if (!rangeStart || !rangeEnd) return "—";
+  if (rangeStart === rangeEnd) return formatDateLabel(rangeStart);
+  return `${formatDateLabel(rangeStart)} – ${formatDateLabel(rangeEnd)}`;
+}
+
+// Blends a CSS color variable with the page surface to fake a "lighter step
+// of the same ramp" without hand-maintaining a second palette.
+function colorMix(cssVar, alpha) {
+  return `color-mix(in srgb, ${cssVar} ${alpha * 100}%, var(--surface-2))`;
+}
+
+function tickClock() {
+  document.getElementById("clock").textContent =
+    new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" });
+}
+
+/* ============================================================
+   BOOT
+   ============================================================ */
+buildTabs();
+tickClock();
+setInterval(tickClock, 1000);
+
+// Date pickers default to today and can't go into the future.
+rangeStartInput.max = todayStr();
+rangeEndInput.max = todayStr();
+rangeStartInput.value = todayStr();
+rangeEndInput.value = todayStr();
+
+// Live/Date Range starts on "Live" so the moment someone opens a line tab
+// from Overview it's already in the right mode — but we don't call
+// setMode()/refresh() here, since that would fetch a line's data before
+// anyone has actually opened a line. setViewMode("line", ...) does that
+// fetch itself, the first time a line tab is clicked.
+liveBtn.setAttribute("aria-pressed", "true");
+rangeModeBtn.setAttribute("aria-pressed", "false");
+rangeBar.hidden = true;
+
+// The dashboard opens on Overview — a plant-wide read is the more useful
+// default for walking up to a shared kiosk than any one arbitrarily-first
+// line.
+refreshOverview();
+startOverviewAutoRefresh();
+
+// Schedule + production actuals sync on their own 60s timer, independent
+// of which view is open or which Live/Date Range mode a line is in —
+// someone could be sitting on Overview and still want a schedule upload or
+// checkbox tap made from another screen to be reflected the moment they
+// open a line.
+(async function bootSharedData() {
+  await Promise.all([loadScheduleFromSupabase(), loadProductionActuals()]);
+  refreshScheduleUI();
+  if (viewMode === "line") refreshProductionCard();
+  setInterval(async () => {
+    await Promise.all([loadScheduleFromSupabase(), loadProductionActuals()]);
+    refreshScheduleUI();
+    if (viewMode === "line") refreshProductionCard();
+  }, 60000);
+})();
+</script>
+</body>
+</html>
