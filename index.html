@@ -849,6 +849,7 @@
   <div id="mode-row" hidden>
     <div class="segmented" role="group" aria-label="View mode">
       <button type="button" id="mode-live-btn" aria-pressed="true">Live</button>
+      <button type="button" id="mode-yesterday-btn" aria-pressed="false">Yesterday</button>
       <button type="button" id="mode-range-btn" aria-pressed="false">Date Range</button>
     </div>
     <div id="range-bar" hidden>
@@ -1056,8 +1057,15 @@ async function fetchLineMetrics(line, start, end) {
 
 async function refresh() {
   const today = todayStr();
-  const start = mode === "range" ? rangeStart : today;
-  const end = mode === "range" ? rangeEnd : today;
+  let start, end;
+  if (mode === "range") {
+    start = rangeStart;
+    end = rangeEnd;
+  } else if (mode === "yesterday") {
+    start = end = yesterdayStr();
+  } else {
+    start = end = today;
+  }
   if (!start || !end) return; // range mode with nothing picked yet — nothing to fetch
 
   try {
@@ -1227,6 +1235,10 @@ function updateStatusLine() {
   }
   if (mode === "live") {
     el.textContent = `Updated ${formatTime(lastGoodAt)} · refreshes every ${CONFIG.REFRESH_INTERVAL_MS / 1000}s`;
+  } else if (mode === "yesterday") {
+    // A day that's already over doesn't need a "tap Refresh" nudge the way
+    // Date Range does — there's nothing new coming in for it.
+    el.textContent = `Updated ${formatTime(lastGoodAt)} · showing Yesterday`;
   } else {
     el.textContent = `Updated ${formatTime(lastGoodAt)} · showing ${periodLabel()} · tap Refresh for the latest`;
   }
@@ -1408,6 +1420,7 @@ function stopOverviewAutoRefresh() {
    MODE TOGGLE (Live / Date Range) — line detail only
    ============================================================ */
 const liveBtn = document.getElementById("mode-live-btn");
+const yesterdayBtn = document.getElementById("mode-yesterday-btn");
 const rangeModeBtn = document.getElementById("mode-range-btn");
 const rangeBar = document.getElementById("range-bar");
 const rangeStartInput = document.getElementById("range-start-input");
@@ -1418,12 +1431,20 @@ const rangeRefreshBtn = document.getElementById("range-refresh-btn");
 function setMode(newMode) {
   mode = newMode;
   liveBtn.setAttribute("aria-pressed", mode === "live" ? "true" : "false");
+  yesterdayBtn.setAttribute("aria-pressed", mode === "yesterday" ? "true" : "false");
   rangeModeBtn.setAttribute("aria-pressed", mode === "range" ? "true" : "false");
   rangeBar.hidden = mode !== "range";
 
   if (mode === "live") {
     rangeRefreshBtn.hidden = true;
     startAutoRefresh();
+    resetLoadingState();
+    refresh();
+  } else if (mode === "yesterday") {
+    // Unlike Date Range, there's a fixed, known date here (no picker to
+    // wait on) — fetch it immediately, same as Live does.
+    rangeRefreshBtn.hidden = true;
+    stopAutoRefresh();
     resetLoadingState();
     refresh();
   } else {
@@ -1443,6 +1464,7 @@ function stopAutoRefresh() {
 }
 
 liveBtn.addEventListener("click", () => setMode("live"));
+yesterdayBtn.addEventListener("click", () => setMode("yesterday"));
 rangeModeBtn.addEventListener("click", () => setMode("range"));
 
 rangeViewBtn.addEventListener("click", () => {
@@ -2077,6 +2099,12 @@ function todayStr() {
   return new Date().toISOString().slice(0, 10);
 }
 
+function yesterdayStr() {
+  const d = new Date();
+  d.setDate(d.getDate() - 1);
+  return d.toISOString().slice(0, 10);
+}
+
 function formatDateLabel(isoDate) {
   const [y, m, d] = isoDate.split("-").map(Number);
   return new Date(y, m - 1, d).toLocaleDateString([], { month: "short", day: "numeric" });
@@ -2084,6 +2112,7 @@ function formatDateLabel(isoDate) {
 
 function periodLabel() {
   if (mode === "live") return "Today";
+  if (mode === "yesterday") return "Yesterday";
   if (!rangeStart || !rangeEnd) return "—";
   if (rangeStart === rangeEnd) return formatDateLabel(rangeStart);
   return `${formatDateLabel(rangeStart)} – ${formatDateLabel(rangeEnd)}`;
@@ -2119,6 +2148,7 @@ rangeEndInput.value = todayStr();
 // anyone has actually opened a line. setViewMode("line", ...) does that
 // fetch itself, the first time a line tab is clicked.
 liveBtn.setAttribute("aria-pressed", "true");
+yesterdayBtn.setAttribute("aria-pressed", "false");
 rangeModeBtn.setAttribute("aria-pressed", "false");
 rangeBar.hidden = true;
 
