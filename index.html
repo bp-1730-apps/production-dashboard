@@ -80,7 +80,7 @@
     display: flex;
     align-items: center;
     justify-content: space-between;
-    padding: 16px 28px;
+    padding: 12px 24px;
     background: var(--surface);
     border-bottom: 1px solid var(--border);
     box-shadow: var(--shadow-sm);
@@ -115,8 +115,8 @@
   nav#line-tabs {
     display: flex;
     align-items: center;
-    gap: 10px;
-    padding: 14px 28px;
+    gap: 8px;
+    padding: 10px 24px;
     background: var(--page);
     flex: 0 0 auto;
     overflow-x: auto;
@@ -124,9 +124,9 @@
   nav#line-tabs button {
     /* Touch target: comfortably above the ~44px minimum, since this is used
        on a shop floor, possibly with gloves. */
-    min-height: 60px;
-    min-width: 110px;
-    padding: 10px 22px;
+    min-height: 52px;
+    min-width: 100px;
+    padding: 8px 18px;
     border-radius: var(--radius-md);
     border: 1px solid var(--border);
     background: var(--surface);
@@ -166,8 +166,8 @@
   #mode-row {
     display: flex;
     align-items: center;
-    gap: 14px;
-    padding: 0 28px 14px;
+    gap: 10px;
+    padding: 0 24px 10px;
     flex: 0 0 auto;
     flex-wrap: wrap;
   }
@@ -182,8 +182,8 @@
     flex: 0 0 auto;
   }
   .segmented button {
-    min-height: 52px;
-    padding: 8px 20px;
+    min-height: 46px;
+    padding: 6px 16px;
     border: none;
     background: transparent;
     color: var(--text-2);
@@ -206,8 +206,8 @@
   }
   #range-bar[hidden] { display: none; }
   #range-bar input[type="date"] {
-    min-height: 52px;
-    padding: 8px 14px;
+    min-height: 46px;
+    padding: 6px 12px;
     border-radius: var(--radius-md);
     border: 1px solid var(--border);
     background: var(--surface);
@@ -221,8 +221,8 @@
     font-size: 0.95rem;
   }
   .btn {
-    min-height: 52px;
-    padding: 8px 22px;
+    min-height: 46px;
+    padding: 6px 18px;
     border-radius: var(--radius-md);
     border: 1px solid var(--accent);
     background: var(--accent);
@@ -271,7 +271,7 @@
   /* ---------------- Main content ---------------- */
   main {
     flex: 1 1 auto;
-    padding: 22px 28px 26px;
+    padding: 16px 24px 18px;
     min-height: 0;
     display: flex;
     flex-direction: column;
@@ -281,7 +281,7 @@
     min-height: 0;
     display: flex;
     flex-direction: column;
-    gap: 20px;
+    gap: 14px;
   }
   #overview-view[hidden], #line-view[hidden] { display: none; }
 
@@ -290,7 +290,7 @@
     border: 1px solid var(--border);
     border-radius: var(--radius-lg);
     box-shadow: var(--shadow-md);
-    padding: 22px 24px;
+    padding: 16px 18px;
     /* Grid/flex items default to a content-based min-width, which lets a
        wide child (the dispatch table's non-wrapping cells) force the whole
        row — and the page — wider than the viewport instead of scrolling
@@ -299,8 +299,8 @@
     min-height: 0;
   }
   .card h2 {
-    margin: 0 0 16px;
-    font-size: 0.85rem;
+    margin: 0 0 10px;
+    font-size: 0.8rem;
     font-weight: 700;
     color: var(--text-muted);
     text-transform: uppercase;
@@ -329,17 +329,17 @@
     flex: 0 0 auto;
     display: grid;
     grid-template-columns: repeat(4, 1fr);
-    gap: 16px;
+    gap: 12px;
   }
   .mini-stat {
     background: var(--surface);
     border: 1px solid var(--border);
     border-radius: var(--radius-md);
     box-shadow: var(--shadow-sm);
-    padding: 16px 18px;
+    padding: 12px 14px;
   }
   .mini-stat .mini-value {
-    font-size: 1.9rem;
+    font-size: 1.6rem;
     font-weight: 800;
     letter-spacing: -0.02em;
     color: var(--text);
@@ -347,9 +347,9 @@
     line-height: 1;
   }
   .mini-stat .mini-label {
-    font-size: 0.78rem;
+    font-size: 0.74rem;
     color: var(--text-muted);
-    margin-top: 8px;
+    margin-top: 6px;
     font-weight: 700;
     text-transform: uppercase;
     letter-spacing: 0.05em;
@@ -365,7 +365,7 @@
        of stretching to 6-across-one-row with a lot of dead space below —
        a plant with 6-9 lines reads as 2-3 well-proportioned rows. */
     grid-template-columns: repeat(3, 1fr);
-    gap: 18px;
+    gap: 14px;
     align-content: start;
     padding-bottom: 4px;
   }
@@ -381,7 +381,7 @@
     border-left: 5px solid var(--text-muted);
     border-radius: var(--radius-lg);
     box-shadow: var(--shadow-md);
-    padding: 20px 22px;
+    padding: 14px 16px;
     min-width: 0;
   }
   .line-card.status-good     { border-left-color: var(--good); }
@@ -392,23 +392,23 @@
     display: flex;
     align-items: flex-start;
     justify-content: space-between;
-    margin-bottom: 12px;
+    margin-bottom: 8px;
     gap: 10px;
   }
   .line-card-name {
-    font-size: 1.15rem;
+    font-size: 1.05rem;
     font-weight: 800;
     color: var(--text);
     letter-spacing: -0.01em;
   }
   .line-card-code {
-    font-size: 0.78rem;
+    font-size: 0.74rem;
     color: var(--text-muted);
     font-weight: 600;
     margin-top: 2px;
   }
   .line-card-oee {
-    font-size: 2.1rem;
+    font-size: 1.8rem;
     font-weight: 800;
     letter-spacing: -0.02em;
     font-variant-numeric: tabular-nums;
@@ -420,13 +420,13 @@
     display: flex;
     justify-content: space-between;
     align-items: center;
-    font-size: 0.88rem;
+    font-size: 0.85rem;
     color: var(--text-2);
-    margin-top: 9px;
+    margin-top: 6px;
     gap: 10px;
   }
   .line-card-row strong { color: var(--text); font-variant-numeric: tabular-nums; font-weight: 700; }
-  .line-card .meter-track { height: 10px; border-radius: 6px; margin-top: 6px; }
+  .line-card .meter-track { height: 8px; border-radius: 5px; margin-top: 5px; }
   .line-card-error {
     font-size: 0.85rem;
     color: var(--critical);
@@ -440,7 +440,7 @@
     flex: 0 0 auto;
     display: grid;
     grid-template-columns: 0.9fr 0.6fr 1.05fr 0.6fr;
-    gap: 20px;
+    gap: 14px;
   }
   @media (max-width: 1400px) {
     /* Not enough width for the side-by-side layouts — stack instead. This
@@ -488,35 +488,35 @@
   /* OEE meter: "a single ratio against a limit" reads best as a meter, not
      a gauge or a pie — the fill length IS the number. */
   .meter-value {
-    font-size: 3rem;
+    font-size: 2.4rem;
     font-weight: 800;
     letter-spacing: -0.02em;
     line-height: 1;
-    margin-bottom: 4px;
+    margin-bottom: 3px;
     color: var(--text);
   }
   .meter-status {
     display: inline-flex;
     align-items: center;
-    gap: 8px;
-    font-size: 1rem;
+    gap: 7px;
+    font-size: 0.92rem;
     font-weight: 600;
     /* Text stays neutral ink — the dot is the only thing that carries the
        status color, since warning yellow reads too light as body text on
        a white surface. */
     color: var(--text-2);
-    margin-bottom: 14px;
+    margin-bottom: 9px;
   }
   .meter-status .dot {
-    width: 11px;
-    height: 11px;
+    width: 10px;
+    height: 10px;
     border-radius: 50%;
     flex: 0 0 auto;
   }
   .meter-track {
     position: relative;
-    height: 22px;
-    border-radius: 11px;
+    height: 16px;
+    border-radius: 8px;
     background: var(--surface-2);
     box-shadow: inset 0 1px 2px rgba(16,19,26,0.06);
     overflow: hidden;
@@ -525,29 +525,29 @@
     position: absolute;
     inset: 0;
     width: 0%;
-    border-radius: 11px;
+    border-radius: 8px;
     transition: width 0.6s ease, background 0.3s ease;
   }
   .meter-scale {
     display: flex;
     justify-content: space-between;
-    margin-top: 6px;
-    font-size: 0.85rem;
+    margin-top: 5px;
+    font-size: 0.8rem;
     color: var(--text-muted);
     font-variant-numeric: tabular-nums;
   }
 
   .stat-value {
-    font-size: 2.3rem;
+    font-size: 1.85rem;
     font-weight: 800;
     letter-spacing: -0.02em;
     line-height: 1;
     color: var(--text);
   }
   .stat-label {
-    font-size: 0.95rem;
+    font-size: 0.88rem;
     color: var(--text-muted);
-    margin-top: 6px;
+    margin-top: 4px;
   }
 
   /* ---------------- Production: Target vs Actual ---------------- */
@@ -555,42 +555,44 @@
   .prod-grid {
     display: grid;
     grid-template-columns: 1fr 1fr;
-    gap: 14px;
-    margin-bottom: 14px;
+    gap: 10px;
+    margin-bottom: 9px;
   }
   .prod-metric {
     display: flex;
     flex-direction: column;
-    gap: 6px;
+    gap: 4px;
   }
   .prod-metric-label {
-    font-size: 0.76rem;
+    font-size: 0.72rem;
     font-weight: 700;
     text-transform: uppercase;
     letter-spacing: 0.05em;
     color: var(--text-muted);
   }
   .prod-target {
-    font-size: 1.25rem;
+    font-size: 1.1rem;
     font-weight: 800;
     color: var(--text);
     font-variant-numeric: tabular-nums;
     min-height: 1.3em;
   }
-  .prod-target .unit { font-size: 0.8rem; font-weight: 600; color: var(--text-muted); margin-left: 4px; }
+  .prod-target .unit { font-size: 0.76rem; font-weight: 600; color: var(--text-muted); margin-left: 4px; }
   .prod-no-target {
     color: var(--text-muted);
-    font-size: 0.85rem;
+    font-size: 0.82rem;
     font-weight: 500;
   }
   .prod-input {
-    min-height: 56px;
-    padding: 8px 14px;
+    /* Kept at the ~44px touch-target floor even in compact mode — this is
+       still a shop-floor input a gloved hand needs to hit reliably. */
+    min-height: 48px;
+    padding: 6px 12px;
     border-radius: var(--radius-md);
     border: 2px solid var(--border);
     background: var(--page);
     color: var(--text);
-    font-size: 1.3rem;
+    font-size: 1.15rem;
     font-weight: 700;
     font-family: inherit;
     font-variant-numeric: tabular-nums;
@@ -634,9 +636,9 @@
     flex-direction: column;
   }
   .dispatch-summary {
-    font-size: 0.9rem;
+    font-size: 0.88rem;
     color: var(--text-muted);
-    margin-bottom: 12px;
+    margin-bottom: 8px;
     flex: 0 0 auto;
   }
   .dispatch-table-wrap {
@@ -656,17 +658,17 @@
     top: 0;
     background: var(--surface);
     text-align: left;
-    font-size: 0.75rem;
+    font-size: 0.72rem;
     font-weight: 700;
     text-transform: uppercase;
     letter-spacing: 0.05em;
     color: var(--text-muted);
-    padding: 10px 12px;
+    padding: 8px 12px;
     border-bottom: 1px solid var(--border);
   }
   .dispatch-table td {
-    padding: 10px 12px;
-    font-size: 0.92rem;
+    padding: 8px 12px;
+    font-size: 0.88rem;
     color: var(--text-2);
     border-bottom: 1px solid var(--border);
     vertical-align: middle;
@@ -726,17 +728,17 @@
     flex-direction: column;
   }
   .schedule-mini-progress {
-    font-size: 1.6rem;
+    font-size: 1.4rem;
     font-weight: 800;
     letter-spacing: -0.01em;
     color: var(--text);
     line-height: 1.2;
-    margin-bottom: 10px;
+    margin-bottom: 7px;
   }
   .schedule-mini-note {
-    font-size: 0.85rem;
+    font-size: 0.82rem;
     color: var(--text-muted);
-    margin-top: 10px;
+    margin-top: 7px;
     font-weight: 600;
   }
 
