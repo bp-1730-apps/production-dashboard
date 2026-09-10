@@ -64,7 +64,9 @@
     font-size: 18px;
     -webkit-tap-highlight-color: transparent;
     user-select: none;
-    overflow: hidden; /* this page is a fixed kiosk view, not a scrolling page */
+    overflow: hidden; /* this page is a fixed kiosk view, not a scrolling page — see the
+       max-width:1400px block near the bottom, which turns this off for anything
+       tablet-sized or narrower (this rule only really applies above that). */
   }
 
   #app {
@@ -362,10 +364,10 @@
     align-content: start;
     padding-bottom: 4px;
   }
-  @media (max-width: 1300px) {
+  @media (max-width: 1400px) {
     .overview-grid { grid-template-columns: repeat(2, 1fr); }
   }
-  @media (max-width: 700px) {
+  @media (max-width: 820px) {
     .overview-grid { grid-template-columns: 1fr; }
   }
   .line-card {
@@ -442,15 +444,44 @@
     grid-template-columns: 1.3fr 1fr;
     gap: 20px;
   }
-  @media (max-width: 1100px) {
-    /* Not enough width for the side-by-side layouts — stack, and let the
-       page scroll rather than crush a card unreadably thin. A real kiosk
-       screen is wide, so this mainly protects a portrait tablet or a
-       narrow preview window, not the shop-floor display itself. */
+  @media (max-width: 1400px) {
+    /* Not enough width for the side-by-side layouts — stack instead. This
+       threshold (1400px, not 1100px) is deliberately wide enough to catch
+       every iPad in both orientations — even a 12.9" iPad Pro landscape is
+       1366px — because below it we also do something more important than
+       stacking columns: we stop trying to force the whole page into
+       exactly one screen's height.
+
+       Above this width (a real kiosk monitor, or a desktop window), the
+       page is a fixed "everything fits in one screen, no scrolling" view
+       with small internal scrollboxes inside the dispatch table and the
+       schedule list — deliberate, so a gloved hand can't accidentally
+       scroll the floor display. That only works because every ancestor
+       from #app down is pinned to exactly the viewport's height.
+
+       On an iPad, that same pinned-height chain is what was causing the
+       problem reported from the floor: content (especially the Today's
+       Schedule list, once items are on screen) could compute taller than
+       the sliver of height actually left for it after the header/nav/
+       other cards, and — because of how WebKit/Safari resolves intrinsic
+       sizes through several layers of nested flex and grid — that
+       overflow was rendering as items overlapping each other, or as the
+       schedule list collapsing to near-zero height so nothing in it was
+       visible or tappable, rather than cleanly scrolling in place.
+
+       The fix isn't a patch on the schedule card specifically — it's to
+       stop pinning the page to one screen at all below kiosk width. Below
+       here, html/body/#app size to their actual content instead of
+       exactly 100% of the viewport, so every card below just stacks and
+       grows downward, and the *page* scrolls normally, the way any
+       ordinary webpage does — no nested "must fit in this exact box"
+       regions left to break. */
+    html, body { height: auto; min-height: 100%; overflow: auto; }
+    #app { height: auto; min-height: 100%; }
+
     .stat-strip { grid-template-columns: 1fr; }
-    .detail-row { grid-template-columns: 1fr; overflow-y: auto; }
+    .detail-row { grid-template-columns: 1fr; }
     .overview-summary { grid-template-columns: repeat(2, 1fr); }
-    html, body { overflow: auto; }
   }
   @media (max-width: 640px) {
     .overview-summary { grid-template-columns: 1fr 1fr; }
