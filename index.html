@@ -2341,7 +2341,6 @@ function setViewMode(newMode, line) {
   closeWidgetModal();
   viewMode = newMode;
   if (newMode === "line" && line) currentLine = line;
-
   document.getElementById("overview-view").hidden = viewMode !== "overview";
   document.getElementById("line-view").hidden = viewMode !== "line";
   document.getElementById("shift-report-view").hidden = viewMode !== "shift-report";
