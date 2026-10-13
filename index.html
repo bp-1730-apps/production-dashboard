@@ -467,6 +467,8 @@
   .line-card.status-warning  { border-left-color: var(--warning);  background: color-mix(in srgb, var(--warning) 16%, var(--surface)); }
   .line-card.status-critical { border-left-color: var(--critical); background: color-mix(in srgb, var(--critical) 11%, var(--surface)); }
   .line-card.status-offline  { border-left-color: var(--border-strong); }
+  .line-card.status-idle     { border-left-color: var(--border-strong); background: var(--surface); opacity: 0.62; }
+  .line-card.status-idle .line-card-oee { color: var(--text-muted); }
   /* Floor-distance legibility: the card's color, a big OEE number, and a
      solid status pill with a symbol (so it never relies on color alone) are
      what read from across the room; the rest is supporting detail. */
@@ -480,6 +482,7 @@
   .line-card.status-good     .line-card-status { background: var(--good);     color: #fff; }
   .line-card.status-warning  .line-card-status { background: var(--warning);  color: #1a1400; }
   .line-card.status-critical .line-card-status { background: var(--critical); color: #fff; }
+  .line-card.status-idle     .line-card-status { background: var(--border-strong); color: var(--text-2); }
   .line-card-head {
     display: flex;
     align-items: flex-start;
@@ -2126,7 +2129,15 @@ function netDowntimeOf(data) {
   return data.net_dt !== undefined && data.net_dt !== null ? Number(data.net_dt) || 0 : Number(data.total_dt) || 0;
 }
 
+// A line sitting at exactly 0% OEE is treated as "not running" (nothing
+// produced / scheduled off), not as a failing line — it shows grey and is
+// left out of the plant average and the below-target count so an idle line
+// can't drag the numbers down or raise a false red alarm.
+function isNotRunning(data) {
+  return !!data && round1(data.oee || 0) === 0;
+}
 function statusFor(oee) {
+  if (oee === 0) return { color: "var(--text-muted)", label: "Not running" };
   if (oee >= CONFIG.OEE_GOOD) return { color: "var(--good)",     label: "On target" };
   if (oee >= CONFIG.OEE_WARN) return { color: "var(--warning)",  label: "Below target" };
   return                              { color: "var(--critical)", label: "Critical" };
@@ -2413,16 +2424,18 @@ function renderOverview(results, date) {
   const gridEl = document.getElementById("overview-grid");
 
   const ok = results.filter(r => r.data);
-  const avgOee = ok.length ? ok.reduce((s, r) => s + Number(r.data.oee || 0), 0) / ok.length : null;
+  const running = ok.filter(r => !isNotRunning(r.data)); // 0% lines are "not running" — kept out of the average and target count
+  const idleCount = ok.length - running.length;
+  const avgOee = running.length ? running.reduce((s, r) => s + Number(r.data.oee || 0), 0) / running.length : null;
   const totalDt = ok.reduce((s, r) => s + netDowntimeOf(r.data), 0);
   const openDispatches = ok.reduce((s, r) => s + (r.data.dispatches || []).filter(d => d.status_key === "open").length, 0);
-  const belowTarget = ok.filter(r => round1(r.data.oee || 0) < CONFIG.OEE_GOOD).length; // rounded, so it matches each card's color
+  const belowTarget = running.filter(r => round1(r.data.oee || 0) < CONFIG.OEE_GOOD).length; // rounded, so it matches each card's color
 
   summaryEl.innerHTML = `
     <div class="mini-stat"><div class="mini-value">${avgOee === null ? "—" : round1(avgOee) + "%"}</div><div class="mini-label">Plant Avg OEE</div></div>
     <div class="mini-stat"><div class="mini-value">${round1(totalDt)}</div><div class="mini-label">Downtime (min)</div></div>
     <div class="mini-stat"><div class="mini-value">${openDispatches}</div><div class="mini-label">Open Dispatches</div></div>
-    <div class="mini-stat"><div class="mini-value" style="color:${belowTarget ? "var(--critical)" : "var(--good)"}">${belowTarget} / ${CONFIG.LINES.length}</div><div class="mini-label">Lines Below Target</div></div>
+    <div class="mini-stat"><div class="mini-value" style="color:${belowTarget ? "var(--critical)" : "var(--good)"}">${belowTarget} / ${running.length}</div><div class="mini-label">Lines Below Target${idleCount ? ` · ${idleCount} not running` : ""}</div></div>
   `;
 
   gridEl.innerHTML = results.map(r => {
@@ -2441,7 +2454,8 @@ function renderOverview(results, date) {
 
     const oee = round1(r.data.oee);
     const { color, label } = statusFor(oee);
-    const statusClass = oee >= CONFIG.OEE_GOOD ? "status-good" : oee >= CONFIG.OEE_WARN ? "status-warning" : "status-critical";
+    const idle = isNotRunning(r.data);
+    const statusClass = idle ? "status-idle" : oee >= CONFIG.OEE_GOOD ? "status-good" : oee >= CONFIG.OEE_WARN ? "status-warning" : "status-critical";
     const dispatches = r.data.dispatches || [];
     const openCount = dispatches.filter(d => d.status_key === "open").length;
 
@@ -2463,9 +2477,9 @@ function renderOverview(results, date) {
             <div class="line-card-name">${escapeHtml(r.line.name)}</div>
             <div class="line-card-code">${escapeHtml(r.line.code)}</div>
           </div>
-          <div class="line-card-oee">${oee}%</div>
+          <div class="line-card-oee">${idle ? "—" : oee + "%"}</div>
         </div>
-        <div class="line-card-status"><span class="sym" aria-hidden="true">${statusClass === "status-good" ? "✓" : statusClass === "status-warning" ? "!" : "✕"}</span>${escapeHtml(label)}</div>
+        <div class="line-card-status"><span class="sym" aria-hidden="true">${statusClass === "status-good" ? "✓" : statusClass === "status-warning" ? "!" : statusClass === "status-idle" ? "–" : "✕"}</span>${escapeHtml(label)}</div>
         <div class="line-card-row"><span>Downtime${nonProdOf(r.data) > 0 ? " (net)" : ""}</span><strong>${round1(netDowntimeOf(r.data))} min</strong></div>
         <div class="line-card-row"><span>Dispatches</span><strong>${dispatches.length}${openCount ? ` (${openCount} open)` : ""}</strong></div>
         ${prodHtml}
